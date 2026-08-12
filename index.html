@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Theo doi mua hang</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Dieu huong chinh">
+        <div class="brand">
+          <div class="brand-mark">MH</div>
+          <div>
+            <h1>Mua hang</h1>
+            <p>Quan ly noi bo</p>
+          </div>
+        </div>
+
+        <nav class="nav-list" id="navList">
+          <button class="nav-item active" data-view="dashboard" type="button">Tong quan</button>
+          <button class="nav-item" data-view="requests" type="button">Yeu cau mua hang</button>
+          <button class="nav-item" data-view="orders" type="button">Don mua hang</button>
+          <button class="nav-item" data-view="suppliers" type="button">Nha cung cap</button>
+          <button class="nav-item" data-view="receipts" type="button">Nhan hang</button>
+          <button class="nav-item" data-view="payments" type="button">Thanh toan</button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <span>Vai tro hien tai</span>
+          <strong>Purchasing</strong>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Procurement workspace</p>
+            <h2 id="pageTitle">Tong quan</h2>
+          </div>
+          <div class="topbar-actions">
+            <button class="icon-button" id="resetDataBtn" type="button" title="Khoi phuc du lieu mau">↻</button>
+            <button class="primary-button" id="quickRequestBtn" type="button">+ Tao yeu cau</button>
+          </div>
+        </header>
+
+        <section class="view active" id="dashboardView" aria-labelledby="pageTitle">
+          <div class="metrics-grid" id="metricsGrid"></div>
+
+          <div class="content-grid">
+            <section class="panel">
+              <div class="panel-header">
+                <h3>Can xu ly</h3>
+                <span id="pendingCount">0 viec</span>
+              </div>
+              <div class="timeline" id="activityList"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h3>Chi phi theo nha cung cap</h3>
+                <span>Thang hien tai</span>
+              </div>
+              <div class="bar-list" id="supplierSpend"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="requestsView">
+          <div class="section-toolbar">
+            <div>
+              <h3>Yeu cau mua hang</h3>
+              <p>Tao, duyet va theo doi nhu cau mua sam cua tung phong ban.</p>
+            </div>
+            <button class="primary-button" data-open-modal="requestModal" type="button">+ Tao yeu cau</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ma YC</th>
+                  <th>Ngay YC</th>
+                  <th>Phong ban</th>
+                  <th>Mat hang</th>
+                  <th>Uoc tinh</th>
+                  <th>Trang thai</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="requestsTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="ordersView">
+          <div class="section-toolbar">
+            <div>
+              <h3>Don mua hang</h3>
+              <p>Lap PO tu yeu cau da duyet va theo doi tien do giao hang.</p>
+            </div>
+            <button class="primary-button" data-open-modal="orderModal" type="button">+ Tao PO</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ma PO</th>
+                  <th>Nha cung cap</th>
+                  <th>Lien ket YC</th>
+                  <th>Ngay giao du kien</th>
+                  <th>Tong tien</th>
+                  <th>Trang thai</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="ordersTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="suppliersView">
+          <div class="section-toolbar">
+            <div>
+              <h3>Nha cung cap</h3>
+              <p>Luu thong tin lien he, nhom hang va trang thai hop tac.</p>
+            </div>
+            <button class="primary-button" data-open-modal="supplierModal" type="button">+ Them NCC</button>
+          </div>
+          <div class="supplier-grid" id="supplierCards"></div>
+        </section>
+
+        <section class="view" id="receiptsView">
+          <div class="section-toolbar">
+            <div>
+              <h3>Nhan hang</h3>
+              <p>Ghi nhan so luong thuc nhan va cac van de khi giao hang.</p>
+            </div>
+            <button class="primary-button" data-open-modal="receiptModal" type="button">+ Ghi nhan</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ma PO</th>
+                  <th>Ngay nhan</th>
+                  <th>So luong</th>
+                  <th>Tinh trang</th>
+                  <th>Ghi chu</th>
+                </tr>
+              </thead>
+              <tbody id="receiptsTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="paymentsView">
+          <div class="section-toolbar">
+            <div>
+              <h3>Thanh toan</h3>
+              <p>Theo doi hoa don, han thanh toan va so tien con lai.</p>
+            </div>
+            <button class="primary-button" data-open-modal="paymentModal" type="button">+ Them hoa don</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Hoa don</th>
+                  <th>Ma PO</th>
+                  <th>Han thanh toan</th>
+                  <th>Gia tri</th>
+                  <th>Da tra</th>
+                  <th>Trang thai</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="paymentsTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="modalBackdrop" hidden>
+      <form class="modal" id="requestModal" data-kind="requests">
+        <div class="modal-header">
+          <h3 id="requestModalTitle">Tao yeu cau mua hang</h3>
+          <button class="ghost-button close-modal" type="button">×</button>
+        </div>
+        <div class="form-row">
+          <label>Ma yeu cau<input name="code" id="requestCodeInput" required placeholder="YC-2606-001" /></label>
+          <label>Ngay yeu cau<input name="requestDate" id="requestDateInput" required type="date" /></label>
+        </div>
+        <label>Phong ban<input name="department" required placeholder="Vi du: San xuat" /></label>
+        <div class="items-header">
+          <strong>Danh sach mat hang</strong>
+          <button class="mini-button" id="addRequestItemBtn" type="button">+ Them dong</button>
+        </div>
+        <div class="request-items-frame">
+          <table class="request-items-table">
+            <thead>
+              <tr>
+                <th>Mat hang</th>
+                <th>So luong</th>
+                <th>Don vi</th>
+                <th>Don gia</th>
+                <th>Thanh tien</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="requestItems"></tbody>
+          </table>
+        </div>
+        <div class="request-total">
+          <span>Tong uoc tinh</span>
+          <strong id="requestEstimatedTotal">0 VND</strong>
+        </div>
+        <label>Ly do<textarea name="reason" required rows="3"></textarea></label>
+        <button class="primary-button" id="requestSubmitBtn" type="submit">Luu yeu cau</button>
+      </form>
+
+      <form class="modal" id="orderModal" data-kind="orders">
+        <div class="modal-header">
+          <h3>Tao don mua hang</h3>
+          <button class="ghost-button close-modal" type="button">×</button>
+        </div>
+        <label>Yeu cau da duyet<select name="requestId" id="orderRequestSelect" required></select></label>
+        <label>Nha cung cap<select name="supplierId" id="orderSupplierSelect" required></select></label>
+        <div class="form-row">
+          <label>Ngay dat<input name="orderDate" required type="date" /></label>
+          <label>Ngay giao du kien<input name="expectedDate" required type="date" /></label>
+        </div>
+        <label>Tong tien<input name="totalAmount" required min="0" type="number" /></label>
+        <button class="primary-button" type="submit">Luu PO</button>
+      </form>
+
+      <form class="modal" id="supplierModal" data-kind="suppliers">
+        <div class="modal-header">
+          <h3>Them nha cung cap</h3>
+          <button class="ghost-button close-modal" type="button">×</button>
+        </div>
+        <label>Ten cong ty<input name="name" required /></label>
+        <label>Nhom hang<input name="category" required placeholder="Vat tu, IT, van phong pham..." /></label>
+        <div class="form-row">
+          <label>Nguoi lien he<input name="contact" required /></label>
+          <label>So dien thoai<input name="phone" required /></label>
+        </div>
+        <label>Email<input name="email" required type="email" /></label>
+        <button class="primary-button" type="submit">Luu NCC</button>
+      </form>
+
+      <form class="modal" id="receiptModal" data-kind="receipts">
+        <div class="modal-header">
+          <h3>Ghi nhan nhan hang</h3>
+          <button class="ghost-button close-modal" type="button">×</button>
+        </div>
+        <label>Don mua hang<select name="orderId" id="receiptOrderSelect" required></select></label>
+        <div class="form-row">
+          <label>Ngay nhan<input name="receivedDate" required type="date" /></label>
+          <label>So luong thuc nhan<input name="receivedQty" required min="0" type="number" /></label>
+        </div>
+        <label>Tinh trang
+          <select name="condition" required>
+            <option>Dat</option>
+            <option>Thieu hang</option>
+            <option>Hu hong</option>
+            <option>Can kiem tra</option>
+          </select>
+        </label>
+        <label>Ghi chu<textarea name="note" rows="3"></textarea></label>
+        <button class="primary-button" type="submit">Luu nhan hang</button>
+      </form>
+
+      <form class="modal" id="paymentModal" data-kind="payments">
+        <div class="modal-header">
+          <h3>Them hoa don thanh toan</h3>
+          <button class="ghost-button close-modal" type="button">×</button>
+        </div>
+        <label>Don mua hang<select name="orderId" id="paymentOrderSelect" required></select></label>
+        <label>So hoa don<input name="invoiceNo" required /></label>
+        <div class="form-row">
+          <label>Han thanh toan<input name="dueDate" required type="date" /></label>
+          <label>Gia tri hoa don<input name="amount" required min="0" type="number" /></label>
+        </div>
+        <label>Da thanh toan<input name="paidAmount" required min="0" type="number" /></label>
+        <button class="primary-button" type="submit">Luu hoa don</button>
+      </form>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
