@@ -155,8 +155,23 @@ button {
 
 .topbar-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10px;
   align-items: center;
+}
+
+.cloud-status {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .primary-button,
@@ -244,6 +259,21 @@ button {
 
 .panel {
   padding: 18px;
+}
+
+.export-panel {
+  margin-bottom: 18px;
+}
+
+.export-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.export-actions .ghost-button {
+  min-height: 44px;
+  font-weight: 700;
 }
 
 .panel-header {
@@ -447,6 +477,13 @@ tr:last-child td {
   line-height: 1.5;
 }
 
+.supplier-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -479,6 +516,11 @@ tr:last-child td {
 
 #requestModal {
   width: min(820px, 100%);
+}
+
+#orderModal,
+#tenderModal {
+  width: min(960px, 100%);
 }
 
 .modal-header {
@@ -522,6 +564,18 @@ textarea {
   gap: 12px;
 }
 
+.field-with-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.field-with-action .mini-button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
 .items-header,
 .request-total {
   display: flex;
@@ -534,6 +588,13 @@ textarea {
   font-size: 14px;
 }
 
+.inline-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .request-items-frame {
   overflow: auto;
   border: 1px solid var(--line);
@@ -542,27 +603,61 @@ textarea {
 }
 
 .request-items-table {
-  min-width: 820px;
+  min-width: 1120px;
+  box-shadow: none;
+}
+
+.tender-quotes-table {
+  min-width: 1220px;
   box-shadow: none;
 }
 
 .request-items-table th,
-.request-items-table td {
+.request-items-table td,
+.tender-quotes-table th,
+.tender-quotes-table td {
   padding: 10px;
 }
 
+.tender-quotes-table th:first-child {
+  width: 72px;
+}
+
+.tender-quotes-table th:nth-child(2) {
+  width: 24%;
+}
+
+.tender-quotes-table th:nth-child(3),
+.tender-quotes-table th:nth-child(4),
+.tender-quotes-table th:nth-child(5) {
+  width: 17%;
+}
+
+.tender-quotes-table input,
+.tender-quotes-table select {
+  min-height: 36px;
+}
+
+.tender-quotes-table input[type="radio"] {
+  min-height: auto;
+}
+
 .request-items-table th:first-child {
-  width: 30%;
+  width: 22%;
 }
 
-.request-items-table th:nth-child(2),
-.request-items-table th:nth-child(3) {
-  width: 13%;
+.request-items-table th:nth-child(2) {
+  width: 22%;
 }
 
-.request-items-table th:nth-child(4),
-.request-items-table th:nth-child(5) {
-  width: 19%;
+.request-items-table th:nth-child(3),
+.request-items-table th:nth-child(4) {
+  width: 10%;
+}
+
+.request-items-table th:nth-child(5),
+.request-items-table th:nth-child(6) {
+  width: 17%;
 }
 
 .request-items-table th:last-child {
@@ -584,6 +679,13 @@ textarea {
   color: var(--red);
   font-size: 16px;
   font-weight: 800;
+}
+
+.form-hint {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .request-total {
@@ -632,6 +734,7 @@ textarea {
 
   .metrics-grid,
   .content-grid,
+  .export-actions,
   .supplier-grid {
     grid-template-columns: 1fr;
   }
@@ -657,7 +760,15 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .field-with-action {
+    grid-template-columns: 1fr;
+  }
+
   .request-items-table {
-    min-width: 780px;
+    min-width: 1120px;
+  }
+
+  .tender-quotes-table {
+    min-width: 1220px;
   }
 }
