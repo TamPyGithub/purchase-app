@@ -5,9 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Theo dõi mua hàng</title>
     <link rel="stylesheet" href="./styles.css" />
-  </head>
+  <link rel="stylesheet" href="./online.css" /></head>
   <body>
-    <div class="app-shell">
+  <section id="onlineLogin" aria-label="Đăng nhập">
+    <form id="onlineLoginForm">
+      <h1>Quản lý mua hàng</h1><p>Đăng nhập bằng tài khoản được cấp để làm việc với dữ liệu chung.</p>
+      <label>Email<input name="email" type="email" autocomplete="username" required /></label>
+      <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required /></label>
+      <button type="submit" class="primary-button">Đăng nhập</button>
+      <p id="onlineAuthMessage" role="status"></p>
+    </form>
+  </section>
+  <div id="onlineAccount" hidden><span id="onlineUser"></span>
+    <button id="onlineBackup" class="ghost-button" type="button">Sao lưu dữ liệu</button>
+    <button id="onlineManage" class="ghost-button" type="button" hidden>Quản lý nhân viên</button>
+    <button id="onlineLogout" class="ghost-button" type="button">Đăng xuất</button>
+  </div>
+  <div id="onlineBanner" role="status" hidden><p id="onlineMessage"></p>
+    <div id="onlineRecovery" hidden>
+      <button id="onlineRetry" type="button" class="mini-button">Thử lại</button>
+      <button id="onlineDownload" type="button" class="mini-button">Tải bản nháp</button>
+      <button id="onlineReload" type="button" class="mini-button">Lấy dữ liệu mới nhất</button>
+    </div>
+  </div>
+  <dialog id="onlineMembers"><h2>Quản lý nhân viên</h2>
+    <p>Tạo tài khoản email và mật khẩu trong Supabase → Authentication → Users trước, rồi cấp quyền tại đây.</p>
+    <form id="onlineMemberForm"><label>Email nhân viên<input name="email" type="email" required /></label>
+      <button type="submit" class="primary-button">Cấp quyền nhân viên</button></form>
+    <p id="onlineMemberMessage" role="status"></p><ul id="onlineMemberList"></ul>
+    <button id="onlineCloseMembers" class="ghost-button" type="button">Đóng</button>
+  </dialog>
+    <div class="app-shell" inert>
       <aside class="sidebar" aria-label="Điều hướng chính">
         <div class="brand">
           <div class="brand-mark">MH</div>
@@ -455,6 +483,7 @@
     </div>
 
     <datalist id="unitOptions"></datalist>
-    <script src="./app.js"></script>
+    <script src="./online.js"></script>
+<script src="./app.js"></script>
   </body>
 </html>

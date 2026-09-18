@@ -138,6 +138,8 @@ let cloudSaveTimer = null;
 let cloudStatusText = "";
 
 function loadData() {
+  return onlineEmpty();
+
   const stored = localStorage.getItem(STORAGE_KEY);
   const data = stored ? JSON.parse(stored) : structuredClone(initialData);
   const units = [...new Set([...(data.units || initialData.units), ...collectUnitsFromData(data)])];
@@ -155,11 +157,15 @@ function loadData() {
 }
 
 function saveData(options = {}) {
+  return onlineSave();
+
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   if (!options.localOnly) queueCloudSave();
 }
 
 function loadCloudConfig() {
+  return {};
+
   const stored = localStorage.getItem(CLOUD_CONFIG_KEY);
   const data = stored ? JSON.parse(stored) : {};
   return {
@@ -266,6 +272,8 @@ function queueCloudSave() {
 }
 
 async function syncFromCloud() {
+  return onlineRefresh(true);
+
   if (!isCloudConfigured()) {
     setCloudStatus("Chưa cấu hình online");
     return;
@@ -671,9 +679,9 @@ function getRequestItemSummary(request) {
   if (!items.length) return "Chưa có mặt hàng";
 
   const first = items[0];
-  const specification = first.specification ? `<br><small>${first.specification}</small>` : "";
+  const specification = first.specification ? `<br><small>${escapeXml(first.specification)}</small>` : "";
   const suffix = items.length > 1 ? `<br><small>+${items.length - 1} mặt hàng khác</small>` : "";
-  return `${first.item}${specification}<br><small>${first.quantity} ${first.unit}</small>${suffix}`;
+  return `${escapeXml(first.item)}${specification}<br><small>${escapeXml(first.quantity)} ${escapeXml(first.unit)}</small>${suffix}`;
 }
 
 function getRequestSelectText(request) {
@@ -707,7 +715,7 @@ function getSelectedTenderQuote(tender) {
 }
 
 function statusBadge(status) {
-  return `<span class="status ${statusClass[status] || "progress"}">${status}</span>`;
+  return `<span class="status ${statusClass[status] || "progress"}">${escapeXml(status)}</span>`;
 }
 
 function render() {
@@ -744,17 +752,17 @@ function renderDashboard() {
 
   const activities = [
     ...state.requests.filter((request) => request.status === "Chờ duyệt").map((request) => ({
-      title: `${request.code} đang chờ duyệt`,
-      detail: `${request.department} cần mua ${getRequestSelectText(request)}`,
+      title: `${escapeXml(request.code)} đang chờ duyệt`,
+      detail: `${escapeXml(request.department)} cần mua ${getRequestSelectText(request)}`,
       value: formatMoney(getRequestTotal(request))
     })),
     ...state.orders.filter((order) => order.status === "Đang giao").map((order) => ({
-      title: `${escapeXml(order.contractNo || order.code)} đang giao`,
+      title: `${order.contractNo || order.code} đang giao`,
       detail: findSupplier(order.supplierId)?.name || "Nhà cung cấp",
       value: formatDateDisplay(order.expectedDate)
     })),
     ...state.payments.filter((payment) => payment.status !== "Đã thanh toán").map((payment) => ({
-      title: `${payment.invoiceNo} cần thanh toán`,
+      title: `${escapeXml(payment.invoiceNo)} cần thanh toán`,
       detail: findOrder(payment.orderId)?.contractNo || findOrder(payment.orderId)?.code || "Hợp đồng",
       value: formatMoney(payment.amount - payment.paidAmount)
     }))
@@ -765,10 +773,10 @@ function renderDashboard() {
     <div class="timeline-item">
       <span class="timeline-dot"></span>
       <div>
-        <p>${item.title}</p>
-        <span>${item.detail}</span>
+        <p>${escapeXml(item.title)}</p>
+        <span>${escapeXml(item.detail)}</span>
       </div>
-      <strong>${item.value}</strong>
+      <strong>${escapeXml(item.value)}</strong>
     </div>
   `).join("") : `<p>Không có việc cần xử lý.</p>`;
 
@@ -783,7 +791,7 @@ function renderDashboard() {
   document.getElementById("supplierSpend").innerHTML = spendBySupplier.length ? spendBySupplier.map(({ supplier, total }) => `
     <div class="bar-row">
       <div class="bar-meta">
-        <strong>${supplier.name}</strong>
+        <strong>${escapeXml(supplier.name)}</strong>
         <span>${formatMoney(total)}</span>
       </div>
       <div class="bar-track"><div class="bar-fill" style="width: ${(total / maxSpend) * 100}%"></div></div>
@@ -794,18 +802,18 @@ function renderDashboard() {
 function renderRequests() {
   document.getElementById("requestsTable").innerHTML = sortByNewestRequestDate(state.requests).map((request) => `
     <tr>
-      <td><strong>${request.code}</strong></td>
-      <td>${formatDateDisplay(request.requestDate)}</td>
-      <td>${request.department}</td>
+      <td><strong>${escapeXml(request.code)}</strong></td>
+      <td>${escapeXml(formatDateDisplay(request.requestDate))}</td>
+      <td>${escapeXml(request.department)}</td>
       <td>${getRequestItemSummary(request)}</td>
       <td>${formatMoney(getRequestTotal(request))}</td>
       <td>${statusBadge(request.status)}</td>
       <td>
         <div class="row-actions">
-          <button class="mini-button" data-action="edit-request" data-id="${request.id}" type="button">Sửa</button>
-          <button class="mini-button" data-action="approve-request" data-id="${request.id}" type="button">Duyệt</button>
-          <button class="mini-button" data-action="reject-request" data-id="${request.id}" type="button">Từ chối</button>
-          <button class="mini-button danger-button" data-action="delete-request" data-id="${request.id}" type="button">Xóa</button>
+          <button class="mini-button" data-action="edit-request" data-id="${escapeXml(request.id)}" type="button">Sửa</button>
+          <button class="mini-button" data-action="approve-request" data-id="${escapeXml(request.id)}" type="button">Duyệt</button>
+          <button class="mini-button" data-action="reject-request" data-id="${escapeXml(request.id)}" type="button">Từ chối</button>
+          <button class="mini-button danger-button" data-action="delete-request" data-id="${escapeXml(request.id)}" type="button">Xóa</button>
         </div>
       </td>
     </tr>
@@ -819,16 +827,16 @@ function renderOrders() {
     return `
       <tr>
         <td><strong>${escapeXml(order.contractNo || order.code)}</strong></td>
-        <td>${supplier?.name || "Không rõ"}</td>
-        <td>${request?.code || "Không rõ"}</td>
-        <td>${formatDateDisplay(order.expectedDate)}</td>
+        <td>${escapeXml(supplier?.name || "Không rõ")}</td>
+        <td>${escapeXml(request?.code || "Không rõ")}</td>
+        <td>${escapeXml(formatDateDisplay(order.expectedDate))}</td>
         <td>${formatMoney(getOrderTotal(order))}</td>
         <td>${statusBadge(order.status)}</td>
         <td>
           <div class="row-actions">
-            <button class="mini-button" data-action="edit-order" data-id="${order.id}" type="button">Sửa</button>
-            <button class="mini-button" data-action="send-order" data-id="${order.id}" type="button">Gửi NCC</button>
-            <button class="mini-button" data-action="receive-order" data-id="${order.id}" type="button">Đã nhận</button>
+            <button class="mini-button" data-action="edit-order" data-id="${escapeXml(order.id)}" type="button">Sửa</button>
+            <button class="mini-button" data-action="send-order" data-id="${escapeXml(order.id)}" type="button">Gửi NCC</button>
+            <button class="mini-button" data-action="receive-order" data-id="${escapeXml(order.id)}" type="button">Đã nhận</button>
           </div>
         </td>
       </tr>
@@ -843,16 +851,16 @@ function renderTenders() {
     const selectedQuote = getSelectedTenderQuote(tender);
     return `
       <tr>
-        <td><strong>${request?.code || "Không rõ"}</strong><br><small>${request?.department || ""}</small></td>
+        <td><strong>${escapeXml(request?.code || "Không rõ")}</strong><br><small>${escapeXml(request?.department || "")}</small></td>
         <td>${tender.quotes?.length || 0}</td>
-        <td>${supplier?.name || "Chưa chọn"}</td>
+        <td>${escapeXml(supplier?.name || "Chưa chọn")}</td>
         <td>${selectedQuote ? formatMoney(selectedQuote.price) : ""}</td>
-        <td>${tender.selectionReason || ""}</td>
+        <td>${escapeXml(tender.selectionReason || "")}</td>
         <td>${statusBadge(tender.status || "Đang đánh giá")}</td>
         <td>
           <div class="row-actions">
-            <button class="mini-button" data-action="edit-tender" data-id="${tender.id}" type="button">Sửa</button>
-            <button class="mini-button danger-button" data-action="delete-tender" data-id="${tender.id}" type="button">Xóa</button>
+            <button class="mini-button" data-action="edit-tender" data-id="${escapeXml(tender.id)}" type="button">Sửa</button>
+            <button class="mini-button danger-button" data-action="delete-tender" data-id="${escapeXml(tender.id)}" type="button">Xóa</button>
           </div>
         </td>
       </tr>
@@ -863,12 +871,12 @@ function renderTenders() {
 function renderSuppliers() {
   document.getElementById("supplierCards").innerHTML = state.suppliers.map((supplier) => `
     <article class="supplier-card">
-      <h4>${supplier.name}</h4>
-      <span>${supplier.category}</span>
-      <p>${supplier.contact}<br>${supplier.phone}${supplier.email ? `<br>${supplier.email}` : ""}</p>
+      <h4>${escapeXml(supplier.name)}</h4>
+      <span>${escapeXml(supplier.category)}</span>
+      <p>${escapeXml(supplier.contact)}<br>${escapeXml(supplier.phone)}${supplier.email ? `<br>${escapeXml(supplier.email)}` : ""}</p>
       <div class="supplier-actions">
-        <button class="mini-button" data-action="edit-supplier" data-id="${supplier.id}" type="button">Sửa</button>
-        <button class="mini-button danger-button" data-action="delete-supplier" data-id="${supplier.id}" type="button">Xóa</button>
+        <button class="mini-button" data-action="edit-supplier" data-id="${escapeXml(supplier.id)}" type="button">Sửa</button>
+        <button class="mini-button danger-button" data-action="delete-supplier" data-id="${escapeXml(supplier.id)}" type="button">Xóa</button>
       </div>
     </article>
   `).join("");
@@ -880,13 +888,13 @@ function renderReceipts() {
     return `
       <tr>
         <td><strong>${escapeXml(order?.contractNo || order?.code || "Không rõ")}</strong></td>
-        <td>${formatDateDisplay(receipt.receivedDate)}</td>
+        <td>${escapeXml(formatDateDisplay(receipt.receivedDate))}</td>
         <td>${escapeXml(receipt.acceptanceChair || '')}</td>
-        <td>${receipt.items ? receipt.items.map(item => escapeXml(item.item) + ': ' + item.quantity + ' ' + escapeXml(item.unit)).join('<br>') : escapeXml(receipt.receivedQty + ' (dữ liệu cũ)')}</td>
+        <td>${receipt.items ? receipt.items.map(item => escapeXml(item.item) + ': ' + escapeXml(item.quantity) + ' ' + escapeXml(item.unit)).join('<br>') : escapeXml(receipt.receivedQty + ' (dữ liệu cũ)')}</td>
         <td>${receipt.totalAmount != null ? formatMoney(receipt.totalAmount) : '—'}</td>
         <td>${statusBadge(receipt.condition)}</td>
         <td>${escapeXml(receipt.conclusion || '')}${receipt.note ? '<br>' + escapeXml(receipt.note) : ''}</td>
-        <td><button class="mini-button" data-action="edit-receipt" data-id="${receipt.id}" type="button">Xem / Sửa</button></td>
+        <td><button class="mini-button" data-action="edit-receipt" data-id="${escapeXml(receipt.id)}" type="button">Xem / Sửa</button></td>
       </tr>
     `;
   }).join("");
@@ -897,15 +905,15 @@ function renderPayments() {
     const order = findOrder(payment.orderId);
     return `
       <tr>
-        <td><strong>${payment.invoiceNo}</strong></td>
+        <td><strong>${escapeXml(payment.invoiceNo)}</strong></td>
         <td>${escapeXml(order?.contractNo || order?.code || "Không rõ")}</td>
-        <td>${formatDateDisplay(payment.dueDate)}</td>
+        <td>${escapeXml(formatDateDisplay(payment.dueDate))}</td>
         <td>${formatMoney(payment.amount)}</td>
         <td>${formatMoney(payment.paidAmount)}</td>
         <td>${statusBadge(payment.status)}</td>
         <td>
           <div class="row-actions">
-            <button class="mini-button" data-action="pay-full" data-id="${payment.id}" type="button">Đã trả đủ</button>
+            <button class="mini-button" data-action="pay-full" data-id="${escapeXml(payment.id)}" type="button">Đã trả đủ</button>
           </div>
         </td>
       </tr>
@@ -917,10 +925,10 @@ function fillSelects() {
   fillTenderRequestOptions();
   fillOrderTenderOptions();
   document.getElementById("orderSupplierSelect").innerHTML = state.suppliers.map((supplier) => (
-    `<option value="${supplier.id}">${supplier.name}</option>`
+    `<option value="${escapeXml(supplier.id)}">${escapeXml(supplier.name)}</option>`
   )).join("");
 
-  const orderOptions = state.orders.map((order) => `<option value="${order.id}">${escapeXml(order.contractNo || order.code)}</option>`).join("");
+  const orderOptions = state.orders.map((order) => `<option value="${escapeXml(order.id)}">${escapeXml(order.contractNo || order.code)}</option>`).join("");
   fillReceiptOrderOptions();
   document.getElementById("paymentOrderSelect").innerHTML = orderOptions;
 }
@@ -942,7 +950,7 @@ function fillTenderRequestOptions(includeRequestId = "") {
     request.status === "Đã duyệt" && (!requestsWithTender.has(request.id) || request.id === includeRequestId)
   ));
   const options = approvedRequests.map((request) => (
-    `<option value="${request.id}">${request.code} - ${getRequestSelectText(request)}</option>`
+    `<option value="${escapeXml(request.id)}">${escapeXml(request.code)} - ${escapeXml(getRequestSelectText(request))}</option>`
   )).join("");
   document.getElementById("tenderRequestSelect").innerHTML = options || '<option value="">Không còn giấy xin mua đã duyệt chưa ghi kết quả</option>';
 }
@@ -958,7 +966,7 @@ function fillOrderTenderOptions(includeTenderId = "") {
   document.getElementById("orderTenderSelect").innerHTML = availableTenders.map((tender) => {
     const request = findRequest(tender.requestId);
     const supplier = findSupplier(tender.selectedSupplierId);
-    return `<option value="${tender.id}">${request?.code || "Không rõ"} - ${supplier?.name || "NCC"}</option>`;
+    return `<option value="${escapeXml(tender.id)}">${escapeXml(request?.code || "Không rõ")} - ${escapeXml(supplier?.name || "NCC")}</option>`;
   }).join("") || '<option value="">Không còn kết quả đấu thầu chưa tạo hợp đồng mua hàng</option>';
 }
 
@@ -1206,7 +1214,7 @@ function deleteSupplier(supplierId) {
   const supplier = findSupplier(supplierId);
   if (!supplier) return;
 
-  const isConfirmed = window.confirm(`Bạn có chắc muốn xóa nhà cung cấp ${supplier.name}?`);
+  const isConfirmed = window.confirm(`Bạn có chắc muốn xóa nhà cung cấp ${escapeXml(supplier.name)}?`);
   if (!isConfirmed) return;
 
   state.suppliers = state.suppliers.filter((item) => item.id !== supplierId);
@@ -1221,7 +1229,7 @@ function deleteSupplier(supplierId) {
 
 function getSupplierOptions(selectedId = "") {
   return state.suppliers.map((supplier) => (
-    `<option value="${supplier.id}" ${supplier.id === selectedId ? "selected" : ""}>${supplier.name}</option>`
+    `<option value="${escapeXml(supplier.id)}" ${supplier.id === selectedId ? "selected" : ""}>${escapeXml(supplier.name)}</option>`
   )).join("");
 }
 
@@ -1233,9 +1241,9 @@ function tenderQuoteTemplate(quote = {}, selectedSupplierId = "") {
       <td><input name="selectedQuote" type="radio" ${isSelected ? "checked" : ""} /></td>
       <td><select name="supplierId" required>${getSupplierOptions(quoteSupplierId)}</select></td>
       <td><input name="price" required inputmode="numeric" placeholder="0" value="${formatNumber(quote.price)}" /></td>
-      <td><input name="deliveryDays" required min="0" type="number" value="${quote.deliveryDays ?? ""}" /></td>
-      <td><input name="paymentTerm" placeholder="VD: 30 ngày" value="${quote.paymentTerm || ""}" /></td>
-      <td><input name="note" placeholder="Điều kiện, bảo hành..." value="${quote.note || ""}" /></td>
+      <td><input name="deliveryDays" required min="0" type="number" value="${escapeXml(quote.deliveryDays ?? "")}" /></td>
+      <td><input name="paymentTerm" placeholder="VD: 30 ngày" value="${escapeXml(quote.paymentTerm || "")}" /></td>
+      <td><input name="note" placeholder="Điều kiện, bảo hành..." value="${escapeXml(quote.note || "")}" /></td>
       <td><button class="icon-button remove-tender-quote" type="button" title="Xóa dòng">x</button></td>
     </tr>
   `;
@@ -1343,7 +1351,7 @@ function applyTenderSuggestionToOrder() {
   document.getElementById("orderSupplierSelect").value = tender.selectedSupplierId;
   fillEditableItems("orderItems", request ? getRequestItems(request) : []);
   updateDocumentTotals("order");
-  hint.textContent = `Đã chọn theo kết quả đấu thầu: ${supplier?.name || "NCC"}${selectedQuote ? " - " + formatMoney(selectedQuote.price) : ""}.`;
+  hint.textContent = `Đã chọn theo kết quả đấu thầu: ${escapeXml(supplier?.name || "NCC")}${selectedQuote ? " - " + formatMoney(selectedQuote.price) : ""}.`;
 }
 
 function openEditOrder(orderId) {
@@ -1732,7 +1740,7 @@ document.body.addEventListener("click", (event) => {
   if (action === "delete-request") {
     const request = findRequest(id);
     if (!request) return;
-    const isConfirmed = window.confirm(`Bạn có chắc muốn xóa giấy xin mua ${request.code}?`);
+    const isConfirmed = window.confirm(`Bạn có chắc muốn xóa giấy xin mua ${escapeXml(request.code)}?`);
     if (!isConfirmed) return;
     const linkedOrderIds = state.orders.filter((order) => order.requestId === id).map((order) => order.id);
     state.requests = state.requests.filter((item) => item.id !== id);
@@ -1790,8 +1798,7 @@ document.body.addEventListener("click", (event) => {
   render();
 });
 
-render();
-if (isCloudConfigured()) syncFromCloud();
+onlineStart();
 
 document.getElementById('receiptOrderSelect').addEventListener('change', fillReceiptFromOrder);
 document.getElementById('addReceiptItemBtn').addEventListener('click', () => { addEditableItemRow('receiptItems'); updateDocumentTotals('receipt'); });
