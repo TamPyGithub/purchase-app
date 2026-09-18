@@ -21,9 +21,9 @@
           <button class="nav-item active" data-view="dashboard" type="button">Tổng quan</button>
           <button class="nav-item" data-view="requests" type="button">Giấy xin mua hàng</button>
           <button class="nav-item" data-view="tenders" type="button">Kết quả đấu thầu</button>
-          <button class="nav-item" data-view="orders" type="button">Đơn mua hàng</button>
+          <button class="nav-item" data-view="orders" type="button">Hợp đồng mua hàng</button>
           <button class="nav-item" data-view="suppliers" type="button">Nhà cung cấp</button>
-          <button class="nav-item" data-view="receipts" type="button">Nhận hàng</button>
+          <button class="nav-item" data-view="receipts" type="button">Nghiệm thu hàng</button>
           <button class="nav-item" data-view="payments" type="button">Thanh toán</button>
         </nav>
 
@@ -59,7 +59,7 @@
             <div class="export-actions">
               <button class="ghost-button" data-export="requests" type="button">Danh mục giấy xin mua</button>
               <button class="ghost-button" data-export="tenders" type="button">Danh mục ghi kết quả đấu thầu</button>
-              <button class="ghost-button" data-export="orders" type="button">Danh mục đơn đặt hàng</button>
+              <button class="ghost-button" data-export="orders" type="button">Danh mục hợp đồng mua hàng</button>
               <button class="ghost-button" data-export="suppliers" type="button">Danh sách nhà cung cấp</button>
             </div>
           </section>
@@ -138,16 +138,16 @@
         <section class="view" id="ordersView">
           <div class="section-toolbar">
             <div>
-              <h3>Đơn mua hàng</h3>
-              <p>Lập PO từ kết quả đấu thầu đã chọn và theo dõi tiến độ giao hàng.</p>
+              <h3>Hợp đồng mua hàng</h3>
+              <p>Lập hợp đồng từ kết quả đấu thầu đã chọn và theo dõi tiến độ giao hàng.</p>
             </div>
-            <button class="primary-button" data-open-modal="orderModal" type="button">+ Tạo PO</button>
+            <button class="primary-button" data-open-modal="orderModal" type="button">+ Tạo hợp đồng</button>
           </div>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Mã PO</th>
+                  <th>Số hợp đồng</th>
                   <th>Nhà cung cấp</th>
                   <th>Liên kết giấy xin mua</th>
                   <th>Ngày giao dự kiến</th>
@@ -175,7 +175,7 @@
         <section class="view" id="receiptsView">
           <div class="section-toolbar">
             <div>
-              <h3>Nhận hàng</h3>
+              <h3>Nghiệm thu hàng</h3>
               <p>Ghi nhận số lượng thực nhận và các vấn đề khi giao hàng.</p>
             </div>
             <button class="primary-button" data-open-modal="receiptModal" type="button">+ Ghi nhận</button>
@@ -184,11 +184,11 @@
             <table>
               <thead>
                 <tr>
-                  <th>Mã PO</th>
+                  <th>Số hợp đồng</th>
                   <th>Ngày nhận</th>
-                  <th>Số lượng</th>
+                  <th>Chủ nhiệm nghiệm thu</th><th>Danh mục thực nhận</th><th>Tổng tiền hàng</th>
                   <th>Tình trạng</th>
-                  <th>Ghi chú</th>
+                  <th>Kết luận / Ghi chú</th><th></th>
                 </tr>
               </thead>
               <tbody id="receiptsTable"></tbody>
@@ -209,7 +209,7 @@
               <thead>
                 <tr>
                   <th>Hóa đơn</th>
-                  <th>Mã PO</th>
+                  <th>Số hợp đồng</th>
                   <th>Hạn thanh toán</th>
                   <th>Giá trị</th>
                   <th>Đã trả</th>
@@ -276,11 +276,12 @@
 
       <form class="modal" id="orderModal" data-kind="orders">
         <div class="modal-header">
-          <h3>Tạo đơn mua hàng</h3>
+          <h3>Tạo hợp đồng mua hàng</h3>
           <button class="ghost-button close-modal" type="button">×</button>
         </div>
-        <label>Kết quả đấu thầu<select name="tenderId" id="orderTenderSelect" required></select></label>
-        <p class="form-hint" id="orderTenderHint">Chưa chọn kết quả đấu thầu.</p>
+        <label>Kết quả mở thầu<select name="tenderId" id="orderTenderSelect" required></select></label>
+        <p class="form-hint" id="orderTenderHint">Chưa chọn kết quả mở thầu.</p>
+        <label>Số hợp đồng<input name="contractNo" id="contractNoInput" class="contract-number" maxlength="20" size="20" required /></label>
         <div class="field-with-action">
           <label>Nhà cung cấp<select name="supplierId" id="orderSupplierSelect" required></select></label>
           <button class="mini-button" id="addSupplierFromOrderBtn" type="button">+ Thêm NCC mới</button>
@@ -309,11 +310,12 @@
             <tbody id="orderItems"></tbody>
           </table>
         </div>
-        <div class="request-total">
-          <span>Tổng tiền đơn mua hàng</span>
-          <strong id="orderTotalAmount">0 VND</strong>
-        </div>
-        <button class="primary-button" id="orderSubmitBtn" type="submit">Lưu PO</button>
+        <div class="request-total"><span>Tổng tiền hàng chưa thuế</span><strong id="orderSubtotal">0 VND</strong></div>
+        <label class="money-adjustment">Tiền chiết khấu<input name="discountAmount" inputmode="numeric" placeholder="-0" aria-label="Tiền chiết khấu" /></label>
+        <p class="form-hint">Chiết khấu được ghi bằng giá trị âm và trừ vào tiền hàng.</p>
+        <label class="money-adjustment">Tiền thuế VAT<input name="vatAmount" inputmode="numeric" placeholder="0" aria-label="Tiền thuế VAT" /></label>
+        <div class="request-total"><span>Tổng tiền hàng</span><strong id="orderTotalAmount">0 VND</strong></div>
+        <button class="primary-button" id="orderSubmitBtn" type="submit">Lưu hợp đồng</button>
       </form>
 
       <form class="modal" id="tenderModal" data-kind="tenders">
@@ -394,14 +396,36 @@
 
       <form class="modal" id="receiptModal" data-kind="receipts">
         <div class="modal-header">
-          <h3>Ghi nhận nhận hàng</h3>
+          <h3>Biên bản Nghiệm thu hàng</h3>
           <button class="ghost-button close-modal" type="button">×</button>
         </div>
-        <label>Đơn mua hàng<select name="orderId" id="receiptOrderSelect" required></select></label>
-        <div class="form-row">
+        <div class="receipt-details">
+          <label>Số hợp đồng<select name="orderId" id="receiptOrderSelect" required></select></label>
           <label>Ngày nhận<input name="receivedDate" required type="text" inputmode="numeric" maxlength="10" placeholder="dd/MM/yyyy" pattern="(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}" title="Nhập ngày theo định dạng dd/MM/yyyy" /></label>
-          <label>Số lượng thực nhận<input name="receivedQty" required min="0" type="number" /></label>
+          <label>Chủ nhiệm nghiệm thu<input name="acceptanceChair" required /></label>
         </div>
+        <div class="items-header"><strong>Danh mục thực nhận</strong><button class="mini-button" id="addReceiptItemBtn" type="button">+ Thêm dòng</button></div>
+        <div class="request-items-frame">
+          <table class="request-items-table">
+            <thead>
+              <tr>
+                <th>Mặt hàng</th>
+                <th>Quy cách</th>
+                <th>Số lượng</th>
+                <th>Đơn vị</th>
+                <th>Đơn giá</th>
+                <th>Thành tiền</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="receiptItems"></tbody>
+          </table>
+        </div>
+        <div class="request-total"><span>Tổng tiền hàng chưa thuế</span><strong id="receiptSubtotal">0 VND</strong></div>
+        <label class="money-adjustment">Tiền chiết khấu<input name="discountAmount" inputmode="numeric" placeholder="-0" aria-label="Tiền chiết khấu" /></label>
+        <p class="form-hint">Chiết khấu được ghi bằng giá trị âm và trừ vào tiền hàng.</p>
+        <label class="money-adjustment">Tiền thuế VAT<input name="vatAmount" inputmode="numeric" placeholder="0" aria-label="Tiền thuế VAT" /></label>
+        <div class="request-total"><span>Tổng tiền hàng</span><strong id="receiptTotalAmount">0 VND</strong></div>
         <label>Tình trạng
           <select name="condition" required>
             <option>Đạt</option>
@@ -410,8 +434,8 @@
             <option>Cần kiểm tra</option>
           </select>
         </label>
-        <label>Ghi chú<textarea name="note" rows="3"></textarea></label>
-        <button class="primary-button" type="submit">Lưu nhận hàng</button>
+        <label>Kết luận của hội đồng nghiệm thu<textarea name="conclusion" rows="2" required></textarea></label>
+        <button class="primary-button" type="submit">Lưu biên bản nghiệm thu</button>
       </form>
 
       <form class="modal" id="paymentModal" data-kind="payments">
@@ -419,7 +443,7 @@
           <h3>Thêm hóa đơn thanh toán</h3>
           <button class="ghost-button close-modal" type="button">×</button>
         </div>
-        <label>Đơn mua hàng<select name="orderId" id="paymentOrderSelect" required></select></label>
+        <label>Hợp đồng mua hàng<select name="orderId" id="paymentOrderSelect" required></select></label>
         <label>Số hóa đơn<input name="invoiceNo" required /></label>
         <div class="form-row">
           <label>Hạn thanh toán<input name="dueDate" required type="text" inputmode="numeric" maxlength="10" placeholder="dd/MM/yyyy" pattern="(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}" title="Nhập ngày theo định dạng dd/MM/yyyy" /></label>

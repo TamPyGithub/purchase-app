@@ -85,9 +85,9 @@ const viewTitles = {
   dashboard: "Tổng quan",
   requests: "Giấy xin mua hàng",
   tenders: "Kết quả đấu thầu",
-  orders: "Đơn mua hàng",
+  orders: "Hợp đồng mua hàng",
   suppliers: "Nhà cung cấp",
-  receipts: "Nhận hàng",
+  receipts: "Nghiệm thu hàng",
   payments: "Thanh toán"
 };
 
@@ -130,6 +130,7 @@ const statusClass = {
 let state = loadData();
 let editingRequestId = null;
 let editingOrderId = null;
+let editingReceiptId = null;
 let editingSupplierId = null;
 let supplierModalContext = null;
 let cloudConfig = loadCloudConfig();
@@ -299,7 +300,7 @@ function formatNumber(value) {
 }
 
 function formatNumberInput(input) {
-  input.value = formatNumber(input.value);
+  input.value = /^0+$/.test(input.value) ? '0' : formatNumber(input.value);
 }
 
 function formatDateDisplay(value) {
@@ -476,25 +477,31 @@ function exportTendersToExcel() {
 }
 
 function exportOrdersToExcel() {
-  downloadExcelFile("danh-muc-don-dat-hang.xls", "Đơn đặt hàng", [
-    "Số đơn đặt hàng",
+  downloadExcelFile("danh-muc-hop-dong-mua-hang.xls", "Hợp đồng mua hàng", [
+    "Số hợp đồng",
     "Ngày đặt",
     "Ngày giao dự kiến",
     "Nhà cung cấp",
     "Số giấy xin mua",
     "Danh sách mặt hàng",
-    "Tổng tiền",
+    "Tổng tiền hàng chưa thuế",
+    "Tiền chiết khấu",
+    "Tiền thuế VAT",
+    "Tổng tiền hàng",
     "Trạng thái"
   ], state.orders.map((order) => {
     const supplier = findSupplier(order.supplierId);
     const request = findRequest(order.requestId);
     return [
-      order.code,
+      order.contractNo || order.code,
       formatDateDisplay(order.orderDate),
       formatDateDisplay(order.expectedDate),
       supplier?.name || "",
       request?.code || "",
       formatItemsForExport(getOrderItems(order)),
+      calculateAmounts(getOrderItems(order)).subtotalAmount,
+      -Math.abs(Number(order.discountAmount) || 0),
+      Number(order.vatAmount) || 0,
       getOrderTotal(order),
       order.status || ""
     ];
@@ -606,8 +613,53 @@ function getOrderItems(order) {
   return request ? getRequestItems(request) : [];
 }
 
+function calculateAmounts(items, discount = 0, vat = 0) {
+  const subtotalAmount = items.reduce((sum, item) => sum + Number(item.estimatedPrice || 0), 0);
+  const discountAmount = -Math.abs(Number(discount) || 0);
+  const vatAmount = Math.max(0, Number(vat) || 0);
+  return { subtotalAmount, discountAmount, vatAmount, totalAmount: subtotalAmount + discountAmount + vatAmount };
+}
+
 function getOrderTotal(order) {
-  return getOrderItems(order).reduce((sum, item) => sum + Number(item.estimatedPrice || 0), 0) || Number(order.totalAmount || 0);
+  const items = getOrderItems(order);
+  if (!items.length) return Number(order.totalAmount || 0);
+  return calculateAmounts(items, order.discountAmount, order.vatAmount).totalAmount;
+}
+
+function updateDocumentTotals(prefix) {
+  const form = document.getElementById(prefix + 'Modal');
+  const amounts = calculateAmounts(collectEditableItems(prefix + 'Items'), parseNumber(form.elements.discountAmount.value), parseNumber(form.elements.vatAmount.value));
+  document.getElementById(prefix + 'Subtotal').textContent = formatMoney(amounts.subtotalAmount);
+  document.getElementById(prefix + 'TotalAmount').textContent = formatMoney(amounts.totalAmount);
+  return amounts;
+}
+
+function fillDocumentAmounts(prefix, record = {}) {
+  record = record || {};
+  const form = document.getElementById(prefix + 'Modal');
+  form.elements.discountAmount.value = record.discountAmount ? '-' + formatNumber(record.discountAmount) : '';
+  form.elements.vatAmount.value = formatNumber(record.vatAmount);
+  updateDocumentTotals(prefix);
+}
+
+function fillReceiptFromOrder() {
+  const order = findOrder(document.getElementById('receiptOrderSelect').value);
+  fillEditableItems('receiptItems', order ? getOrderItems(order) : []);
+  fillDocumentAmounts('receipt', order);
+}
+
+function openEditReceipt(id) {
+  const receipt = state.receipts.find(item => item.id === id);
+  if (!receipt) return;
+  showOnlyModal('receiptModal');
+  editingReceiptId = id;
+  fillReceiptOrderOptions(receipt.orderId);
+  const form = document.getElementById('receiptModal');
+  form.elements.orderId.value = receipt.orderId;
+  form.elements.receivedDate.value = formatDateDisplay(receipt.receivedDate);
+  for (const field of ['acceptanceChair', 'condition', 'conclusion']) form.elements[field].value = receipt[field] || '';
+  fillEditableItems('receiptItems', receipt.items || []);
+  fillDocumentAmounts('receipt', receipt);
 }
 
 function getRequestTotal(request) {
@@ -679,8 +731,8 @@ function renderDashboard() {
 
   document.getElementById("metricsGrid").innerHTML = [
     ["Giấy xin mua chờ duyệt", pendingRequests, "Cần quản lý xử lý"],
-    ["Đơn đang theo dõi", activeOrders, "PO chưa hoàn tất"],
-    ["Tổng giá trị PO", formatMoney(totalSpend), "Đã ghi nhận"],
+    ["Hợp đồng đang theo dõi", activeOrders, "Hợp đồng chưa hoàn tất"],
+    ["Tổng giá trị hợp đồng", formatMoney(totalSpend), "Đã ghi nhận"],
     ["Công nợ còn lại", formatMoney(unpaid), "Theo hóa đơn"]
   ].map(([label, value, hint]) => `
     <article class="metric-card">
@@ -697,13 +749,13 @@ function renderDashboard() {
       value: formatMoney(getRequestTotal(request))
     })),
     ...state.orders.filter((order) => order.status === "Đang giao").map((order) => ({
-      title: `${order.code} đang giao`,
+      title: `${escapeXml(order.contractNo || order.code)} đang giao`,
       detail: findSupplier(order.supplierId)?.name || "Nhà cung cấp",
       value: formatDateDisplay(order.expectedDate)
     })),
     ...state.payments.filter((payment) => payment.status !== "Đã thanh toán").map((payment) => ({
       title: `${payment.invoiceNo} cần thanh toán`,
-      detail: findOrder(payment.orderId)?.code || "PO",
+      detail: findOrder(payment.orderId)?.contractNo || findOrder(payment.orderId)?.code || "Hợp đồng",
       value: formatMoney(payment.amount - payment.paidAmount)
     }))
   ];
@@ -766,7 +818,7 @@ function renderOrders() {
     const request = findRequest(order.requestId);
     return `
       <tr>
-        <td><strong>${order.code}</strong></td>
+        <td><strong>${escapeXml(order.contractNo || order.code)}</strong></td>
         <td>${supplier?.name || "Không rõ"}</td>
         <td>${request?.code || "Không rõ"}</td>
         <td>${formatDateDisplay(order.expectedDate)}</td>
@@ -827,11 +879,14 @@ function renderReceipts() {
     const order = findOrder(receipt.orderId);
     return `
       <tr>
-        <td><strong>${order?.code || "Không rõ"}</strong></td>
+        <td><strong>${escapeXml(order?.contractNo || order?.code || "Không rõ")}</strong></td>
         <td>${formatDateDisplay(receipt.receivedDate)}</td>
-        <td>${receipt.receivedQty}</td>
+        <td>${escapeXml(receipt.acceptanceChair || '')}</td>
+        <td>${receipt.items ? receipt.items.map(item => escapeXml(item.item) + ': ' + item.quantity + ' ' + escapeXml(item.unit)).join('<br>') : escapeXml(receipt.receivedQty + ' (dữ liệu cũ)')}</td>
+        <td>${receipt.totalAmount != null ? formatMoney(receipt.totalAmount) : '—'}</td>
         <td>${statusBadge(receipt.condition)}</td>
-        <td>${receipt.note || ""}</td>
+        <td>${escapeXml(receipt.conclusion || '')}${receipt.note ? '<br>' + escapeXml(receipt.note) : ''}</td>
+        <td><button class="mini-button" data-action="edit-receipt" data-id="${receipt.id}" type="button">Xem / Sửa</button></td>
       </tr>
     `;
   }).join("");
@@ -843,7 +898,7 @@ function renderPayments() {
     return `
       <tr>
         <td><strong>${payment.invoiceNo}</strong></td>
-        <td>${order?.code || "Không rõ"}</td>
+        <td>${escapeXml(order?.contractNo || order?.code || "Không rõ")}</td>
         <td>${formatDateDisplay(payment.dueDate)}</td>
         <td>${formatMoney(payment.amount)}</td>
         <td>${formatMoney(payment.paidAmount)}</td>
@@ -865,9 +920,20 @@ function fillSelects() {
     `<option value="${supplier.id}">${supplier.name}</option>`
   )).join("");
 
-  const orderOptions = state.orders.map((order) => `<option value="${order.id}">${order.code}</option>`).join("");
-  document.getElementById("receiptOrderSelect").innerHTML = orderOptions;
+  const orderOptions = state.orders.map((order) => `<option value="${order.id}">${escapeXml(order.contractNo || order.code)}</option>`).join("");
+  fillReceiptOrderOptions();
   document.getElementById("paymentOrderSelect").innerHTML = orderOptions;
+}
+
+function fillReceiptOrderOptions(includeOrderId = "") {
+  const recordedOrderIds = new Set(state.receipts.map((receipt) => receipt.orderId));
+  const availableOrders = state.orders.filter((order) => (
+    order.id === includeOrderId || !recordedOrderIds.has(order.id)
+  ));
+  document.getElementById("receiptOrderSelect").innerHTML = availableOrders.map((order) => (
+    `<option value="${escapeXml(order.id)}">${escapeXml(order.contractNo || order.code)}</option>`
+  )).join("") || '<option value="">Không còn hợp đồng chưa ghi nhận biên bản nghiệm thu</option>';
+  document.querySelector('#receiptModal [type="submit"]').disabled = !availableOrders.length;
 }
 
 function fillTenderRequestOptions(includeRequestId = "") {
@@ -893,7 +959,7 @@ function fillOrderTenderOptions(includeTenderId = "") {
     const request = findRequest(tender.requestId);
     const supplier = findSupplier(tender.selectedSupplierId);
     return `<option value="${tender.id}">${request?.code || "Không rõ"} - ${supplier?.name || "NCC"}</option>`;
-  }).join("") || '<option value="">Không còn kết quả đấu thầu chưa tạo đơn mua hàng</option>';
+  }).join("") || '<option value="">Không còn kết quả đấu thầu chưa tạo hợp đồng mua hàng</option>';
 }
 
 function switchView(view) {
@@ -935,11 +1001,21 @@ function openModal(id) {
     fillTenderRequestDetails();
   }
 
+  if (id === "receiptModal") {
+    editingReceiptId = null;
+    document.getElementById('receiptModal').reset();
+    fillReceiptOrderOptions();
+    document.querySelector('#receiptModal [name="receivedDate"]').value = formatDateDisplay(currentDateValue());
+    fillReceiptFromOrder();
+  }
+
   if (id === "orderModal") {
+    document.getElementById('orderModal').reset();
+    document.getElementById('orderTenderSelect').required = true;
     editingOrderId = null;
     fillOrderTenderOptions();
-    document.querySelector("#orderModal .modal-header h3").textContent = "Tạo đơn mua hàng";
-    document.getElementById("orderSubmitBtn").textContent = "Lưu PO";
+    document.querySelector("#orderModal .modal-header h3").textContent = "Tạo hợp đồng mua hàng";
+    document.getElementById("orderSubmitBtn").textContent = "Lưu hợp đồng";
     document.querySelector('#orderModal [name="orderDate"]').value = formatDateDisplay(currentDateValue());
     document.querySelector('#orderModal [name="expectedDate"]').value = "";
     applyTenderSuggestionToOrder();
@@ -947,6 +1023,7 @@ function openModal(id) {
 }
 
 function closeModal() {
+  editingReceiptId = null;
   document.getElementById("modalBackdrop").hidden = true;
   editingRequestId = null;
   editingOrderId = null;
@@ -982,11 +1059,15 @@ function addEditableItemRow(tbodyId, item = {}) {
   const tbody = document.getElementById(tbodyId);
   tbody.insertAdjacentHTML("beforeend", editableItemTemplate());
   const row = tbody.querySelector("tr:last-child");
+  if (tbodyId === 'receiptItems') {
+    row.querySelector('[name="quantity"]').min = '0';
+    row.querySelector('[name="quantity"]').step = 'any';
+  }
   row.querySelector('[name="item"]').value = item.item || "";
   row.querySelector('[name="specification"]').value = item.specification || "";
   row.querySelector('[name="quantity"]').value = item.quantity ?? "";
   row.querySelector('[name="unit"]').value = item.unit || "";
-  row.querySelector('[name="unitPrice"]').value = formatNumber(item.unitPrice);
+  row.querySelector('[name="unitPrice"]').value = item.unitPrice === 0 ? '0' : formatNumber(item.unitPrice);
   updateEditableItemRowTotal(row);
 }
 
@@ -1091,7 +1172,7 @@ function openSupplierFromOrder() {
   editingSupplierId = null;
   supplierModalContext = "order";
   document.getElementById("supplierModal").reset();
-  document.getElementById("supplierModalTitle").textContent = "Thêm nhà cung cấp cho đơn đặt hàng";
+  document.getElementById("supplierModalTitle").textContent = "Thêm nhà cung cấp cho hợp đồng mua hàng";
   document.getElementById("supplierSubmitBtn").textContent = "Lưu và chọn NCC";
   showOnlyModal("supplierModal");
 }
@@ -1252,7 +1333,7 @@ function applyTenderSuggestionToOrder() {
   if (!tender) {
     hint.textContent = "Chưa có kết quả đấu thầu được chọn.";
     fillEditableItems("orderItems", []);
-    updateEditableItemsTotal("orderItems", "orderTotalAmount");
+    updateDocumentTotals("order");
     return;
   }
 
@@ -1261,7 +1342,7 @@ function applyTenderSuggestionToOrder() {
   const selectedQuote = getSelectedTenderQuote(tender);
   document.getElementById("orderSupplierSelect").value = tender.selectedSupplierId;
   fillEditableItems("orderItems", request ? getRequestItems(request) : []);
-  updateEditableItemsTotal("orderItems", "orderTotalAmount");
+  updateDocumentTotals("order");
   hint.textContent = `Đã chọn theo kết quả đấu thầu: ${supplier?.name || "NCC"}${selectedQuote ? " - " + formatMoney(selectedQuote.price) : ""}.`;
 }
 
@@ -1271,17 +1352,21 @@ function openEditOrder(orderId) {
 
   showOnlyModal("orderModal");
   editingOrderId = orderId;
+  document.getElementById("contractNoInput").value = order.contractNo || order.code || "";
   const tenderId = order.tenderId || findTenderByRequest(order.requestId)?.id || "";
   fillOrderTenderOptions(tenderId);
-  document.querySelector("#orderModal .modal-header h3").textContent = "Sửa đơn mua hàng";
-  document.getElementById("orderSubmitBtn").textContent = "Cập nhật PO";
+  const tenderSelect = document.getElementById("orderTenderSelect");
+  tenderSelect.required = Boolean(tenderId);
+  if (!tenderId) tenderSelect.innerHTML = '<option value="">Hợp đồng cũ chưa có kết quả đấu thầu</option>';
+  document.querySelector("#orderModal .modal-header h3").textContent = "Sửa hợp đồng mua hàng";
+  document.getElementById("orderSubmitBtn").textContent = "Cập nhật hợp đồng";
   document.getElementById("orderTenderSelect").value = tenderId;
   document.getElementById("orderSupplierSelect").value = order.supplierId || "";
   document.querySelector('#orderModal [name="orderDate"]').value = formatDateDisplay(order.orderDate);
   document.querySelector('#orderModal [name="expectedDate"]').value = formatDateDisplay(order.expectedDate);
   fillEditableItems("orderItems", getOrderItems(order));
-  updateEditableItemsTotal("orderItems", "orderTotalAmount");
-  document.getElementById("orderTenderHint").textContent = "Đang sửa đơn mua hàng hiện có.";
+  fillDocumentAmounts("order", order);
+  document.getElementById("orderTenderHint").textContent = "Đang sửa hợp đồng mua hàng hiện có.";
 }
 
 function collectRequestItems() {
@@ -1391,13 +1476,13 @@ document.getElementById("tenderRequestItems").addEventListener("click", (event) 
 });
 document.getElementById("addOrderItemBtn").addEventListener("click", () => {
   addEditableItemRow("orderItems");
-  updateEditableItemsTotal("orderItems", "orderTotalAmount");
+  updateDocumentTotals("order");
 });
 document.getElementById("orderItems").addEventListener("input", (event) => {
   handleFormattedPriceInput(event);
   if (event.target.matches('[name="quantity"], [name="unitPrice"]')) {
     updateEditableItemRowTotal(event.target.closest("tr"));
-    updateEditableItemsTotal("orderItems", "orderTotalAmount");
+    updateDocumentTotals("order");
   }
 });
 document.getElementById("orderItems").addEventListener("click", (event) => {
@@ -1405,7 +1490,7 @@ document.getElementById("orderItems").addEventListener("click", (event) => {
   if (!button) return;
   const rows = document.querySelectorAll("#orderItems tr");
   if (rows.length > 1) button.closest("tr").remove();
-  updateEditableItemsTotal("orderItems", "orderTotalAmount");
+  updateDocumentTotals("order");
 });
 document.getElementById("addTenderQuoteBtn").addEventListener("click", () => addTenderQuoteRow());
 document.getElementById("tenderQuotes").addEventListener("input", (event) => {
@@ -1466,12 +1551,13 @@ document.querySelectorAll(".modal").forEach((form) => {
       const tender = findTender(data.tenderId);
       const items = collectEditableItems("orderItems");
       const orderData = {
+        contractNo: data.contractNo.trim().slice(0, 20),
         tenderId: data.tenderId,
-        requestId: tender?.requestId || "",
+        requestId: tender?.requestId || findOrder(editingOrderId)?.requestId || "",
         supplierId: data.supplierId,
         orderDate: toStorageDate(data.orderDate),
         expectedDate: toStorageDate(data.expectedDate),
-        totalAmount: items.reduce((sum, item) => sum + Number(item.estimatedPrice || 0), 0),
+        ...calculateAmounts(items, parseNumber(data.discountAmount), parseNumber(data.vatAmount)),
         items
       };
 
@@ -1563,14 +1649,26 @@ document.querySelectorAll(".modal").forEach((form) => {
     }
 
     if (form.dataset.kind === "receipts") {
-      state.receipts.unshift({
-        id: makeId("gr"),
+      const currentReceipt = state.receipts.find((receipt) => receipt.id === editingReceiptId);
+      const keepingCurrentOrder = currentReceipt?.orderId === data.orderId;
+      if (!findOrder(data.orderId) || (!keepingCurrentOrder && state.receipts.some((receipt) => receipt.orderId === data.orderId))) {
+        alert("Vui lòng chọn hợp đồng chưa ghi nhận biên bản nghiệm thu.");
+        return;
+      }
+      const items = collectEditableItems('receiptItems');
+      const receiptData = {
         orderId: data.orderId,
+        contractNo: findOrder(data.orderId)?.contractNo || findOrder(data.orderId)?.code || '',
         receivedDate: toStorageDate(data.receivedDate),
-        receivedQty: Number(data.receivedQty),
+        acceptanceChair: data.acceptanceChair.trim(),
+        items,
+        receivedQty: items.reduce((sum, item) => sum + item.quantity, 0),
+        ...calculateAmounts(items, parseNumber(data.discountAmount), parseNumber(data.vatAmount)),
         condition: data.condition,
-        note: data.note
-      });
+        conclusion: data.conclusion.trim()
+      };
+      if (editingReceiptId) Object.assign(state.receipts.find(item => item.id === editingReceiptId), receiptData);
+      else state.receipts.unshift({ id: makeId('gr'), ...receiptData });
       const order = findOrder(data.orderId);
       if (order && data.condition === "Đạt") order.status = "Đã nhận";
       switchView("receipts");
@@ -1601,11 +1699,12 @@ document.querySelectorAll(".modal").forEach((form) => {
         showOnlyModal(nextModalId);
       }
       if (orderDraft) {
+        fillOrderTenderOptions(orderDraft.tenderId);
         document.getElementById("orderTenderSelect").value = orderDraft.tenderId || "";
         document.querySelector('#orderModal [name="orderDate"]').value = formatDateDisplay(orderDraft.orderDate);
         document.querySelector('#orderModal [name="expectedDate"]').value = formatDateDisplay(orderDraft.expectedDate);
         fillEditableItems("orderItems", orderDraft.items || []);
-        updateEditableItemsTotal("orderItems", "orderTotalAmount");
+        updateDocumentTotals("order");
       }
       if (nextModalId === "orderModal") {
         document.getElementById("orderSupplierSelect").value = selectedSupplierId;
@@ -1622,6 +1721,8 @@ document.body.addEventListener("click", (event) => {
   if (!button) return;
 
   const { action, id } = button.dataset;
+
+  if (action === "edit-receipt") { openEditReceipt(id); return; }
 
   if (action === "edit-request") {
     openEditRequest(id);
@@ -1691,3 +1792,25 @@ document.body.addEventListener("click", (event) => {
 
 render();
 if (isCloudConfigured()) syncFromCloud();
+
+document.getElementById('receiptOrderSelect').addEventListener('change', fillReceiptFromOrder);
+document.getElementById('addReceiptItemBtn').addEventListener('click', () => { addEditableItemRow('receiptItems'); updateDocumentTotals('receipt'); });
+document.getElementById('receiptItems').addEventListener('input', event => {
+  handleFormattedPriceInput(event);
+  updateEditableItemRowTotal(event.target.closest('tr'));
+  updateDocumentTotals('receipt');
+});
+document.getElementById('receiptItems').addEventListener('click', event => {
+  const button = event.target.closest('.remove-editable-item');
+  if (button && document.querySelectorAll('#receiptItems tr').length > 1) { button.closest('tr').remove(); updateDocumentTotals('receipt'); }
+});
+for (const prefix of ['order', 'receipt']) {
+  const form = document.getElementById(prefix + 'Modal');
+  for (const field of ['discountAmount', 'vatAmount']) {
+    form.elements[field].addEventListener('input', event => {
+      const value = parseNumber(event.target.value);
+      event.target.value = value ? (field === 'discountAmount' ? '-' : '') + formatNumber(value) : '';
+      updateDocumentTotals(prefix);
+    });
+  }
+}

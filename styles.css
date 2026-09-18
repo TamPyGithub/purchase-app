@@ -772,3 +772,47 @@ textarea {
     min-width: 1220px;
   }
 }
+
+.contract-number { width: 24ch; max-width: 100%; }
+.money-adjustment { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.money-adjustment input { width: 24ch; max-width: 55%; text-align: right; }
+#receiptModal,
+#orderModal,
+#requestModal,
+#tenderModal {
+  width: min(1480px, calc(100vw - 40px));
+  max-height: calc(100dvh - 40px);
+  padding: 16px 20px;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) .modal-header h3 { font-size: 20px; }
+#receiptModal .receipt-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr;
+  gap: 12px;
+}
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) label { font-size: 13px; gap: 4px; }
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) input,
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) select,
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) textarea {
+  min-height: 34px;
+  padding: 6px 9px;
+  font: inherit;
+  font-weight: 400;
+}
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) .request-items-table { min-width: 900px; }
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) .request-items-table th,
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) .request-items-table td { padding: 6px 8px; font-size: 13px; }
+#tenderModal .tender-quotes-table th,
+#tenderModal .tender-quotes-table td { padding: 6px 8px; font-size: 13px; }
+#tenderModal input[type="radio"] { min-height: auto; }
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) .request-total { min-height: 34px; }
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) .form-hint { font-size: 12px; margin: 0; }
+:is(#receiptModal, #orderModal, #requestModal, #tenderModal) .primary-button { min-height: 36px; padding: 8px 14px; }
+@media (max-width: 620px) {
+  #receiptModal, #orderModal, #requestModal, #tenderModal { padding: 12px; }
+  #receiptModal .receipt-details { grid-template-columns: 1fr; gap: 8px; }
+  :is(#receiptModal, #orderModal, #requestModal, #tenderModal) .modal-header h3 { font-size: 18px; }
+}
