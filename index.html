@@ -64,7 +64,7 @@
       <main class="main">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Procurement workspace</p>
+            <p class="eyebrow">TAMKTVD workspace</p>
             <h2 id="pageTitle">Tổng quan</h2>
           </div>
           <div class="topbar-actions">
@@ -104,9 +104,16 @@
             <section class="panel">
               <div class="panel-header">
                 <h3>Chi phí theo nhà cung cấp</h3>
-                <span>Tháng hiện tại</span>
+                <span>Toàn bộ hợp đồng</span>
               </div>
               <div class="bar-list" id="supplierSpend"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <h3>Chi phí theo phòng ban</h3>
+                <span>Toàn bộ hợp đồng · gồm chiết khấu và VAT</span>
+              </div>
+              <div class="bar-list" id="departmentSpend"></div>
             </section>
           </div>
         </section>
@@ -197,7 +204,16 @@
             </div>
             <button class="primary-button" data-open-modal="supplierModal" type="button">+ Thêm NCC</button>
           </div>
-          <div class="supplier-grid" id="supplierCards"></div>
+          <div class="table-wrap">
+            <table aria-label="Danh sách nhà cung cấp">
+              <thead><tr>
+                <th scope="col">STT</th><th scope="col">Tên nhà cung cấp</th>
+                <th scope="col">Nhóm hàng</th><th scope="col">Người liên hệ</th>
+                <th scope="col">Điện thoại</th><th scope="col">Email</th><th scope="col">Thao tác</th>
+              </tr></thead>
+              <tbody id="supplierCards"></tbody>
+            </table>
+          </div>
         </section>
 
         <section class="view" id="receiptsView">

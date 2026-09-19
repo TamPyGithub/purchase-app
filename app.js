@@ -797,6 +797,22 @@ function renderDashboard() {
       <div class="bar-track"><div class="bar-fill" style="width: ${(total / maxSpend) * 100}%"></div></div>
     </div>
   `).join("") : `<p>Chưa có dữ liệu chi phí.</p>`;
+
+  const departments = new Map();
+  for (const order of state.orders) {
+    const request = findRequest(order.requestId) || findRequest(findTender(order.tenderId)?.requestId);
+    const department = String(request?.department || '').trim() || 'Chưa xác định phòng ban';
+    const amount = Number(getOrderTotal(order));
+    departments.set(department, (departments.get(department) || 0) + (Number.isFinite(amount) ? amount : 0));
+  }
+  const departmentTotals = [...departments].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'vi'));
+  const maxDepartmentSpend = Math.max(...departmentTotals.map(([, total]) => Math.abs(total)), 1);
+  document.getElementById('departmentSpend').innerHTML = departmentTotals.length ? departmentTotals.map(([department, total]) => `
+    <div class="bar-row">
+      <div class="bar-meta"><strong>${escapeXml(department)}</strong><span>${formatMoney(total)}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width: ${Math.abs(total) / maxDepartmentSpend * 100}%"></div></div>
+    </div>
+  `).join('') : '<p>Chưa có dữ liệu chi phí theo phòng ban.</p>';
 }
 
 function renderRequests() {
@@ -869,17 +885,20 @@ function renderTenders() {
 }
 
 function renderSuppliers() {
-  document.getElementById("supplierCards").innerHTML = state.suppliers.map((supplier) => `
-    <article class="supplier-card">
-      <h4>${escapeXml(supplier.name)}</h4>
-      <span>${escapeXml(supplier.category)}</span>
-      <p>${escapeXml(supplier.contact)}<br>${escapeXml(supplier.phone)}${supplier.email ? `<br>${escapeXml(supplier.email)}` : ""}</p>
-      <div class="supplier-actions">
+  document.getElementById("supplierCards").innerHTML = state.suppliers.map((supplier, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td><strong>${escapeXml(supplier.name)}</strong></td>
+      <td>${escapeXml(supplier.category || '—')}</td>
+      <td>${escapeXml(supplier.contact || '—')}</td>
+      <td class="supplier-phone">${escapeXml(supplier.phone || '—')}</td>
+      <td>${escapeXml(supplier.email || '—')}</td>
+      <td><div class="row-actions">
         <button class="mini-button" data-action="edit-supplier" data-id="${escapeXml(supplier.id)}" type="button">Sửa</button>
         <button class="mini-button danger-button" data-action="delete-supplier" data-id="${escapeXml(supplier.id)}" type="button">Xóa</button>
-      </div>
-    </article>
-  `).join("");
+      </div></td>
+    </tr>
+  `).join("") || '<tr><td colspan="7" class="empty-suppliers">Chưa có nhà cung cấp. Chọn “Thêm nhà cung cấp” để tạo mới.</td></tr>';
 }
 
 function renderReceipts() {
