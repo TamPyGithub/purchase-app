@@ -807,6 +807,17 @@ textarea {
 }
 
 .view { font-size: 13px; line-height: 1.45; }
+.main-search { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.main-search label { font-size: 13px; }
+.main-search input { flex: 1 1 240px; width: auto; min-width: 0; min-height: 34px; padding: 6px 9px; font-size: 13px; }
+.main-search .primary-button, .main-search .ghost-button { width: auto; min-height: 34px; padding: 6px 12px; font-size: 13px; }
+.search-status { color: var(--muted); font-size: 12px; }
+.view tr[hidden], .view .timeline-item[hidden], .view .bar-row[hidden] { display: none !important; }
+@media (max-width: 620px) {
+  .main-search label { width: 100%; }
+  .main-search input { flex-basis: 100%; }
+  .search-status { width: 100%; }
+}
 .view .section-toolbar { margin-bottom: 12px; gap: 12px; }
 .view .section-toolbar h3 { font-size: 18px; }
 .view .section-toolbar p { font-size: 13px; }

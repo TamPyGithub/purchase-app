@@ -729,6 +729,88 @@ function render() {
   renderReceipts();
   renderPayments();
   fillSelects();
+  setupMainSearches();
+  applyMainSearches();
+}
+
+function normalizeSearchText(value) {
+  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLocaleLowerCase('vi').replace(/\s+/g, ' ').trim();
+}
+
+function setupMainSearches() {
+  document.querySelectorAll('.view').forEach(view => {
+    if (view.querySelector('.main-search')) return;
+    const name = view.id.replace(/View$/, '');
+    const form = document.createElement('form');
+    form.className = 'main-search';
+    form.setAttribute('role', 'search');
+    form.setAttribute('aria-label', 'Tìm kiếm ' + viewTitles[name]);
+    const label = document.createElement('label');
+    label.htmlFor = name + 'Search';
+    label.textContent = 'Từ khóa';
+    const input = document.createElement('input');
+    input.type = 'search'; input.id = label.htmlFor;
+    input.placeholder = name === 'dashboard' ? 'Tìm trong Cần xử lý và chi phí…' : 'Nhập mã, tên, phòng ban, nội dung…';
+    input.autocomplete = 'off';
+    const submit = document.createElement('button');
+    submit.type = 'submit'; submit.className = 'primary-button'; submit.textContent = 'Tìm kiếm';
+    const clear = document.createElement('button');
+    clear.type = 'button'; clear.className = 'ghost-button'; clear.textContent = 'Xóa tìm kiếm';
+    const status = document.createElement('span');
+    status.className = 'search-status'; status.setAttribute('role', 'status');
+    form.append(label, input, submit, clear, status);
+    form.addEventListener('submit', event => {
+      event.preventDefault(); form.dataset.query = input.value; applyMainSearches();
+    });
+    clear.addEventListener('click', () => {
+      input.value = ''; form.dataset.query = ''; applyMainSearches(); input.focus();
+    });
+    input.addEventListener('input', () => {
+      if (!input.value) { form.dataset.query = ''; applyMainSearches(); }
+    });
+    view.prepend(form);
+  });
+}
+
+function mainSearchRecords(name) {
+  if (name === 'requests') return sortByNewestRequestDate(state.requests);
+  return state[name] || [];
+}
+
+function mainSearchRecordText(record, name) {
+  // Include full item descriptions and linked documents, even if the table
+  // displays only a summary of them. This never changes the saved records.
+  const order = name === 'receipts' || name === 'payments' ? findOrder(record.orderId) : name === 'orders' ? record : null;
+  const request = findRequest(record.requestId || order?.requestId || findTender(order?.tenderId)?.requestId);
+  const supplier = findSupplier(record.supplierId || record.selectedSupplierId || order?.supplierId);
+  return JSON.stringify([record, request, supplier]);
+}
+
+function applyMainSearches() {
+  const tables = { requests: 'requestsTable', tenders: 'tendersTable', orders: 'ordersTable',
+    suppliers: 'supplierCards', receipts: 'receiptsTable', payments: 'paymentsTable' };
+  document.querySelectorAll('.view').forEach(view => {
+    const form = view.querySelector('.main-search');
+    if (!form) return;
+    const name = view.id.replace(/View$/, '');
+    const terms = normalizeSearchText(form.dataset.query).split(' ').filter(Boolean);
+    const records = mainSearchRecords(name);
+    const rows = name === 'dashboard'
+      ? [...view.querySelectorAll('.timeline-item, .bar-row')]
+      : [...document.getElementById(tables[name]).children].filter(row => !row.querySelector('[colspan]'));
+    let matches = 0;
+    rows.forEach((row, index) => {
+      const cells = name === 'dashboard' ? row : [...row.cells].slice(0, -1);
+      const visibleText = name === 'dashboard' ? cells.textContent : cells.map(cell => cell.textContent).join(' ');
+      const text = normalizeSearchText(visibleText + ' ' + (name === 'dashboard' ? '' : mainSearchRecordText(records[index] || {}, name)));
+      row.hidden = !terms.every(term => text.includes(term));
+      if (!row.hidden) matches++;
+    });
+    form.querySelector('.search-status').textContent = terms.length
+      ? (matches ? `${matches}/${rows.length} kết quả` : 'Không tìm thấy dữ liệu phù hợp.') + (name === 'dashboard' ? ' · Số liệu tổng hợp giữ nguyên.' : '')
+      : '';
+  });
 }
 
 function renderDashboard() {
