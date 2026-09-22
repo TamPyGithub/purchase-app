@@ -10,6 +10,43 @@ let onlineReading = false;
 let onlineEpoch = 0;
 let onlineVersion = 0;
 let onlineRefreshPromise = null;
+let onlineBaseline = null;
+let onlineVersions = {};
+const onlineKinds = ['suppliers','requests','tenders','orders','receipts','payments'];
+function onlineCanonical(value) {
+  if(Array.isArray(value)) return value.map(onlineCanonical);
+  if(value && typeof value==='object') return Object.fromEntries(Object.keys(value).sort().map(key=>[key,onlineCanonical(value[key])]));
+  return value;
+}
+const onlineEqual = (a,b) => JSON.stringify(onlineCanonical(a))===JSON.stringify(onlineCanonical(b));
+function onlineChanges() {
+  const changes=[], guards=new Map();
+  for(const kind of onlineKinds) {
+    const before=new Map(onlineBaseline[kind].map(row=>[row.id,row]));
+    const after=new Map(state[kind].map(row=>[row.id,row]));
+    for(const id of new Set([...before.keys(),...after.keys()])) {
+      if(!onlineEqual(before.get(id),after.get(id))) changes.push({kind,id,
+        expected_version:onlineVersions[kind]?.[id] || null,data:after.get(id) || null});
+    }
+  }
+  const changed=new Set(changes.map(c=>c.kind+':'+c.id));
+  const guard=(kind,id)=>{
+    if(!id || changed.has(kind+':'+id)) return;
+    guards.set(kind+':'+id,{kind,id,expected_version:onlineVersions[kind]?.[id] || null});
+  };
+  for(const c of changes) {
+    const d=c.data;
+    if(!d) continue;
+    if(c.kind==='tenders' || c.kind==='orders') guard('requests',d.requestId);
+    if(c.kind==='tenders') {
+      guard('suppliers',d.selectedSupplierId);
+      for(const q of d.quotes || []) guard('suppliers',q.supplierId);
+    }
+    if(c.kind==='orders') {guard('tenders',d.tenderId);guard('suppliers',d.supplierId);}
+    if(c.kind==='receipts' || c.kind==='payments') guard('orders',d.orderId);
+  }
+  return {changes,guards:[...guards.values()],added_units:state.units.filter(u=>!onlineBaseline.units.includes(u))};
+}
 const onlineEmpty = () => ({suppliers:[],requests:[],orders:[],tenders:[],receipts:[],payments:[],units:[]});
 const onlineEl = id => document.getElementById(id);
 function onlineLock(value) {
@@ -76,6 +113,7 @@ function onlineShowLogin(message='') {
   onlineKeepSession(null);
   onlinePending=null;
   onlineRevision=null;
+  onlineBaseline=null; onlineVersions={};
   state=onlineEmpty();
   closeModal();
   render();
@@ -97,11 +135,13 @@ function onlineAccessError(error) {
 function onlineApply(packet, updateUI=true) {
   onlineRevision=packet.revision;
   state=normalizeLoadedData({...onlineEmpty(),...packet.data});
+  onlineBaseline=structuredClone(state);
+  onlineVersions=structuredClone(packet.versions || {});
   if(updateUI) render();
 }
 async function onlineConnect() {
   const epoch=onlineEpoch;
-  const packet=await onlineRpc('purchase_load');
+  const packet=await onlineRpc('purchase_load_v2');
   if(epoch!==onlineEpoch) return;
   onlineApply(packet);
   onlineEl('onlineLogin').hidden=true;
@@ -111,12 +151,12 @@ async function onlineConnect() {
   document.querySelector('.sidebar-footer strong').textContent=packet.role==='admin' ? 'Quản trị viên' : 'Nhân viên';
   try { onlinePending=JSON.parse(sessionStorage.getItem(onlineDraftKey()) || 'null'); } catch(_) {}
   if(onlinePending) {
-    onlineNotice('Phiên này còn thay đổi chưa xác nhận lưu. Thử lại hoặc tải bản nháp trước khi lấy dữ liệu mới.',true);
+    onlineNotice(onlinePending.format===2 ? 'Phiên này còn thay đổi chưa xác nhận lưu. Thử lại hoặc tải bản nháp trước khi lấy dữ liệu mới.' : 'Còn bản nháp từ phiên bản cũ. Hãy tải bản nháp để giữ lại, rồi lấy dữ liệu mới và nhập lại thay đổi.',true,onlinePending.format===2);
     onlineLock(true);
   } else {
     onlineLock(false);
     onlineNotice('');
-    setCloudStatus('Đã tải dữ liệu online');
+    setCloudStatus('Online · Lưu từng chứng từ');
   }
 }
 async function onlineRefresh(force=false) {
@@ -127,7 +167,7 @@ async function onlineRefresh(force=false) {
   const version=onlineVersion;
   onlineReading=true;
   try {
-    const packet=await onlineRpc('purchase_load');
+    const packet=await onlineRpc('purchase_load_v2');
     if(epoch!==onlineEpoch || version!==onlineVersion || modalOpen() || onlinePending || onlineBusy) return;
     if(packet.revision!==onlineRevision) onlineApply(packet);
     setCloudStatus('Đã cập nhật online');
@@ -138,22 +178,39 @@ async function onlineRefresh(force=false) {
 function onlineSave() {
   if(onlineBusy || onlinePending || !onlineSession || onlineRevision===null) return;
   onlineVersion++;
-  onlinePending={expected_revision:onlineRevision,operation_id:crypto.randomUUID(),document:structuredClone(state)};
+  const mutation=onlineChanges();
+  if(!mutation.changes.length && !mutation.added_units.length) return;
+  onlinePending={format:2,operation_id:crypto.randomUUID(),...mutation,document:structuredClone(state)};
   onlineStoreDraft();
   onlineSend();
 }
 async function onlineSend() {
-  if(onlineBusy || !onlinePending) return;
+  if(onlineBusy || !onlinePending || onlinePending.format!==2) return;
   const epoch=onlineEpoch;
   onlineBusy=true;
   onlineLock(true);
   onlineNotice('Đang lưu dữ liệu online…');
   setCloudStatus('Đang lưu…');
   try {
-    const packet=await onlineRpc('purchase_save',onlinePending);
+    const {operation_id,changes,guards,added_units}=onlinePending;
+    const packet=await onlineRpc('purchase_save_v2',{operation_id,changes,guards,added_units});
     if(epoch!==onlineEpoch) return;
-    onlineRevision=packet.revision;
-    state=normalizeLoadedData(structuredClone(onlinePending.document));
+    if(onlineEl('modalBackdrop').hidden) onlineApply(packet);
+    else {
+      // Adding a supplier may return to an unfinished order/tender form.
+      // Keep its original dependency versions until that form is saved.
+      for(const c of changes) {
+        onlineBaseline[c.kind]=onlineBaseline[c.kind].filter(row=>row.id!==c.id);
+        if(c.data) onlineBaseline[c.kind].push(structuredClone(c.data));
+        onlineVersions[c.kind] ||= {};
+        if(packet.versions[c.kind]?.[c.id]) onlineVersions[c.kind][c.id]=
+          onlineEqual(c.data,packet.data[c.kind].find(row=>row.id===c.id)) ? packet.versions[c.kind][c.id] : c.expected_version;
+        else delete onlineVersions[c.kind][c.id];
+      }
+      onlineBaseline.units=[...new Set([...onlineBaseline.units,...added_units])];
+      // Force a full refresh once the unfinished form is closed.
+      onlineRevision=-1;
+    }
     onlinePending=null;
     onlineStoreDraft();
     onlineNotice('');
@@ -163,7 +220,7 @@ async function onlineSend() {
   } catch(error) {
     if(epoch!==onlineEpoch || onlineAccessError(error)) return;
     onlineNotice(error.status===409
-      ? 'Có người đã lưu thay đổi trước bạn. Tải bản nháp, sau đó lấy dữ liệu mới nhất và nhập lại phần thay đổi.'
+      ? error.message+' Tải bản nháp, sau đó lấy dữ liệu mới nhất và nhập lại phần thay đổi.'
       : 'Chưa xác nhận được việc lưu. Giữ cửa sổ này và thử lại; bạn cũng có thể tải bản nháp để giữ thay đổi.',true,error.status!==409);
     setCloudStatus('Chưa xác nhận lưu');
   } finally {onlineBusy=false;}
@@ -179,7 +236,7 @@ async function onlineReload() {
   const epoch=onlineEpoch;
   onlineBusy=true;
   try {
-    const packet=await onlineRpc('purchase_load');
+    const packet=await onlineRpc('purchase_load_v2');
     if(epoch!==onlineEpoch) return;
     onlineVersion++;
     onlinePending=null; onlineStoreDraft(); closeModal(); onlineApply(packet);
@@ -235,7 +292,7 @@ function onlineStart() {
   onlineEl('onlineReload').onclick=onlineReload;
   onlineEl('onlineBackup').onclick=async()=>{
     const epoch=onlineEpoch;
-    try { const packet=await onlineRpc('purchase_load'); if(epoch===onlineEpoch) onlineDownload(packet.data,'mua-hang-sao-luu-'+new Date().toISOString().slice(0,10)+'.json'); }
+    try { const packet=await onlineRpc('purchase_load_v2'); if(epoch===onlineEpoch) onlineDownload(packet.data,'mua-hang-sao-luu-'+new Date().toISOString().slice(0,10)+'.json'); }
     catch(error) {if(!onlineAccessError(error)) alert('Chưa tải được bản sao lưu. Hãy thử lại.');}
   };
   onlineEl('onlineManage').onclick=()=>{onlineEl('onlineMembers').showModal();onlineMembers();};
