@@ -208,6 +208,7 @@
             <table aria-label="Danh sách nhà cung cấp">
               <thead><tr>
                 <th scope="col">STT</th><th scope="col">Tên nhà cung cấp</th>
+                <th scope="col">Mã số thuế</th>
                 <th scope="col">Nhóm hàng</th><th scope="col">Người liên hệ</th>
                 <th scope="col">Điện thoại</th><th scope="col">Email</th><th scope="col">Thao tác</th>
               </tr></thead>
@@ -428,7 +429,8 @@
           <h3 id="supplierModalTitle">Thêm nhà cung cấp</h3>
           <button class="ghost-button close-modal" type="button">×</button>
         </div>
-        <label>Tên công ty<input name="name" required /></label>
+        <label>Tên nhà cung cấp<input name="name" required /></label>
+        <label>Mã số thuế<input name="taxCode" type="text" maxlength="20" size="20" /></label>
         <label>Nhóm hàng<input name="category" required placeholder="Vật tư, IT, văn phòng phẩm..." /></label>
         <div class="form-row">
           <label>Người liên hệ<input name="contact" required /></label>
