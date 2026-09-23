@@ -518,13 +518,15 @@ function exportOrdersToExcel() {
 
 function exportSuppliersToExcel() {
   downloadExcelFile("danh-sach-nha-cung-cap.xls", "Nhà cung cấp", [
-    "Tên công ty",
+    "Tên nhà cung cấp",
+    "Mã số thuế",
     "Nhóm hàng",
     "Người liên hệ",
     "Số điện thoại",
     "Email"
   ], state.suppliers.map((supplier) => [
     supplier.name || "",
+    supplier.taxCode || "",
     supplier.category || "",
     supplier.contact || "",
     supplier.phone || "",
@@ -971,6 +973,7 @@ function renderSuppliers() {
     <tr>
       <td>${index + 1}</td>
       <td><strong>${escapeXml(supplier.name)}</strong></td>
+      <td>${escapeXml(supplier.taxCode || '—')}</td>
       <td>${escapeXml(supplier.category || '—')}</td>
       <td>${escapeXml(supplier.contact || '—')}</td>
       <td class="supplier-phone">${escapeXml(supplier.phone || '—')}</td>
@@ -980,7 +983,7 @@ function renderSuppliers() {
         <button class="mini-button danger-button" data-action="delete-supplier" data-id="${escapeXml(supplier.id)}" type="button">Xóa</button>
       </div></td>
     </tr>
-  `).join("") || '<tr><td colspan="7" class="empty-suppliers">Chưa có nhà cung cấp. Chọn “Thêm nhà cung cấp” để tạo mới.</td></tr>';
+  `).join("") || '<tr><td colspan="8" class="empty-suppliers">Chưa có nhà cung cấp. Chọn “Thêm nhà cung cấp” để tạo mới.</td></tr>';
 }
 
 function renderReceipts() {
@@ -1305,6 +1308,7 @@ function openEditSupplier(supplierId) {
   document.getElementById("supplierModalTitle").textContent = "Sửa nhà cung cấp";
   document.getElementById("supplierSubmitBtn").textContent = "Cập nhật NCC";
   document.querySelector('#supplierModal [name="name"]').value = supplier.name || "";
+  document.querySelector('#supplierModal [name="taxCode"]').value = supplier.taxCode || "";
   document.querySelector('#supplierModal [name="category"]').value = supplier.category || "";
   document.querySelector('#supplierModal [name="contact"]').value = supplier.contact || "";
   document.querySelector('#supplierModal [name="phone"]').value = supplier.phone || "";
@@ -1717,6 +1721,7 @@ document.querySelectorAll(".modal").forEach((form) => {
     if (form.dataset.kind === "suppliers") {
       const supplierData = {
         name: data.name,
+        taxCode: (data.taxCode || "").trim().slice(0, 20),
         category: data.category,
         contact: data.contact,
         phone: data.phone,
