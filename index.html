@@ -52,7 +52,7 @@
           <button class="nav-item" data-view="orders" type="button">Hợp đồng mua hàng</button>
           <button class="nav-item" data-view="suppliers" type="button">Nhà cung cấp</button>
           <button class="nav-item" data-view="receipts" type="button">Nghiệm thu hàng</button>
-          <button class="nav-item" data-view="payments" type="button">Thanh toán</button>
+          <button class="nav-item" data-view="payments" type="button">Chứng từ thanh toán</button>
         </nav>
 
         <div class="sidebar-footer">
@@ -244,22 +244,19 @@
         <section class="view" id="paymentsView">
           <div class="section-toolbar">
             <div>
-              <h3>Thanh toán</h3>
-              <p>Theo dõi hóa đơn, hạn thanh toán và số tiền còn lại.</p>
+              <h3>Chứng từ thanh toán</h3>
+              <p>Theo dõi chứng từ, hạn thanh toán và ngày thanh toán.</p>
             </div>
-            <button class="primary-button" data-open-modal="paymentModal" type="button">+ Thêm hóa đơn</button>
+            <button class="primary-button" data-open-modal="paymentModal" type="button">+ Thêm chứng từ thanh toán</button>
           </div>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Hóa đơn</th>
-                  <th>Số hợp đồng</th>
-                  <th>Hạn thanh toán</th>
-                  <th>Giá trị</th>
-                  <th>Đã trả</th>
-                  <th>Trạng thái</th>
-                  <th></th>
+                  <th>Ngày nhận chứng từ</th><th>Ngày lập chứng từ</th><th>Số tiền</th>
+                  <th>Hợp đồng mua hàng</th><th>Số hóa đơn</th><th>Ngày hóa đơn</th>
+                  <th>Nội dung thanh toán</th><th>Hạn thanh toán</th><th>Ngày thanh toán</th>
+                  <th>Trạng thái</th><th>Thao tác</th>
                 </tr>
               </thead>
               <tbody id="paymentsTable"></tbody>
@@ -486,17 +483,28 @@
 
       <form class="modal" id="paymentModal" data-kind="payments">
         <div class="modal-header">
-          <h3>Thêm hóa đơn thanh toán</h3>
+          <h3 id="paymentModalTitle">Thêm chứng từ thanh toán</h3>
           <button class="ghost-button close-modal" type="button">×</button>
         </div>
-        <label>Hợp đồng mua hàng<select name="orderId" id="paymentOrderSelect" required></select></label>
-        <label>Số hóa đơn<input name="invoiceNo" required /></label>
         <div class="form-row">
-          <label>Hạn thanh toán<input name="dueDate" required type="text" inputmode="numeric" maxlength="10" placeholder="dd/MM/yyyy" pattern="(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}" title="Nhập ngày theo định dạng dd/MM/yyyy" /></label>
-          <label>Giá trị hóa đơn<input name="amount" required min="0" type="number" /></label>
+          <label>Ngày nhận chứng từ<input name="documentReceivedDate" required data-payment-date type="text" maxlength="10" placeholder="dd/MM/yyyy" /></label>
+          <label>Ngày lập chứng từ<input name="documentDate" required data-payment-date type="text" maxlength="10" placeholder="dd/MM/yyyy" /></label>
         </div>
-        <label>Đã thanh toán<input name="paidAmount" required min="0" type="number" /></label>
-        <button class="primary-button" type="submit">Lưu hóa đơn</button>
+        <div class="form-row">
+          <label>Số tiền<input name="amount" required min="0" step="any" type="number" /></label>
+          <label>Hợp đồng mua hàng<select name="orderId" id="paymentOrderSelect" required></select></label>
+        </div>
+        <div class="form-row">
+          <label>Số hóa đơn<input name="invoiceNo" required /></label>
+          <label>Ngày hóa đơn<input name="invoiceDate" required data-payment-date type="text" maxlength="10" placeholder="dd/MM/yyyy" /></label>
+        </div>
+        <label>Nội dung thanh toán<input name="description" maxlength="50" /></label>
+        <div class="form-row">
+          <label>Hạn thanh toán<input name="dueDate" readonly type="text" placeholder="Ngày nhận chứng từ + 15 ngày" /></label>
+          <label>Ngày thanh toán<input name="paymentDate" data-payment-date type="text" maxlength="10" placeholder="dd/MM/yyyy (có thể để trống)" /></label>
+        </div>
+        <p id="paymentLegacyNote" hidden>Chứng từ cũ đã ghi nhận tiền thanh toán nhưng chưa có ngày thanh toán. Số tiền đã trả được giữ nguyên; hãy bổ sung ngày thực tế khi có thông tin.</p>
+        <button class="primary-button" type="submit">Lưu chứng từ thanh toán</button>
       </form>
     </div>
 
