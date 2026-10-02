@@ -969,6 +969,10 @@ function renderTenders() {
   }).join("");
 }
 
+function normalizeTaxCode(value) {
+  return String(value || "").replace(/\s/g, "").toUpperCase();
+}
+
 function renderSuppliers() {
   document.getElementById("supplierCards").innerHTML = state.suppliers.map((supplier, index) => `
     <tr>
@@ -1790,9 +1794,17 @@ document.querySelectorAll(".modal").forEach((form) => {
     }
 
     if (form.dataset.kind === "suppliers") {
+      const taxCode = normalizeTaxCode(data.taxCode);
+      const duplicate = taxCode && state.suppliers.find((supplier) =>
+        supplier.id !== editingSupplierId && normalizeTaxCode(supplier.taxCode) === taxCode);
+      if (duplicate) {
+        alert(`Mã số thuế này đã được sử dụng cho nhà cung cấp “${duplicate.name}”. Vui lòng kiểm tra lại.`);
+        form.querySelector('[name="taxCode"]').focus();
+        return;
+      }
       const supplierData = {
         name: data.name,
-        taxCode: (data.taxCode || "").trim().slice(0, 20),
+        taxCode,
         category: data.category,
         contact: data.contact,
         phone: data.phone,
