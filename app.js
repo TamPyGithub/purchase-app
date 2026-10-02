@@ -88,7 +88,7 @@ const viewTitles = {
   orders: "Hợp đồng mua hàng",
   suppliers: "Nhà cung cấp",
   receipts: "Nghiệm thu hàng",
-  payments: "Thanh toán"
+  payments: "Chứng từ thanh toán"
 };
 
 const statusAliases = {
@@ -132,6 +132,7 @@ let editingRequestId = null;
 let editingOrderId = null;
 let editingReceiptId = null;
 let editingSupplierId = null;
+let editingPaymentId = null;
 let supplierModalContext = null;
 let cloudConfig = loadCloudConfig();
 let cloudSaveTimer = null;
@@ -819,7 +820,7 @@ function renderDashboard() {
   const pendingRequests = state.requests.filter((request) => request.status === "Chờ duyệt").length;
   const activeOrders = state.orders.filter((order) => order.status !== "Đã nhận").length;
   const totalSpend = state.orders.reduce((sum, order) => sum + Number(getOrderTotal(order)), 0);
-  const unpaid = state.payments.reduce((sum, payment) => sum + Number(payment.amount) - Number(payment.paidAmount), 0);
+  const unpaid = state.payments.reduce((sum, payment) => sum + Math.max(0, Number(payment.amount) - paymentPaidAmount(payment)), 0);
 
   document.getElementById("metricsGrid").innerHTML = [
     ["Giấy xin mua chờ duyệt", pendingRequests, "Cần quản lý xử lý"],
@@ -845,10 +846,10 @@ function renderDashboard() {
       detail: findSupplier(order.supplierId)?.name || "Nhà cung cấp",
       value: formatDateDisplay(order.expectedDate)
     })),
-    ...state.payments.filter((payment) => payment.status !== "Đã thanh toán").map((payment) => ({
+    ...state.payments.filter((payment) => updatePaymentStatus(payment) !== "Đã thanh toán").map((payment) => ({
       title: `${escapeXml(payment.invoiceNo)} cần thanh toán`,
       detail: findOrder(payment.orderId)?.contractNo || findOrder(payment.orderId)?.code || "Hợp đồng",
-      value: formatMoney(payment.amount - payment.paidAmount)
+      value: formatMoney(Math.max(0, payment.amount - paymentPaidAmount(payment)))
     }))
   ];
 
@@ -1009,15 +1010,20 @@ function renderPayments() {
     const order = findOrder(payment.orderId);
     return `
       <tr>
-        <td><strong>${escapeXml(payment.invoiceNo)}</strong></td>
-        <td>${escapeXml(order?.contractNo || order?.code || "Không rõ")}</td>
-        <td>${escapeXml(formatDateDisplay(payment.dueDate))}</td>
+        <td>${escapeXml(formatDateDisplay(payment.documentReceivedDate))}</td>
+        <td>${escapeXml(formatDateDisplay(payment.documentDate))}</td>
         <td>${formatMoney(payment.amount)}</td>
-        <td>${formatMoney(payment.paidAmount)}</td>
-        <td>${statusBadge(payment.status)}</td>
+        <td>${escapeXml(order?.contractNo || order?.code || "Không rõ")}</td>
+        <td><strong>${escapeXml(payment.invoiceNo)}</strong></td>
+        <td>${escapeXml(formatDateDisplay(payment.invoiceDate))}</td>
+        <td>${escapeXml(payment.description || '')}</td>
+        <td>${escapeXml(formatDateDisplay(payment.dueDate))}</td>
+        <td>${escapeXml(formatDateDisplay(payment.paymentDate))}</td>
+        <td>${statusBadge(updatePaymentStatus(payment))}</td>
         <td>
           <div class="row-actions">
-            <button class="mini-button" data-action="pay-full" data-id="${escapeXml(payment.id)}" type="button">Đã trả đủ</button>
+            <button class="mini-button" data-action="edit-payment" data-id="${escapeXml(payment.id)}" type="button">Sửa</button>
+            <button class="mini-button danger-button" data-action="delete-payment" data-id="${escapeXml(payment.id)}" type="button">Xóa</button>
           </div>
         </td>
       </tr>
@@ -1032,9 +1038,17 @@ function fillSelects() {
     `<option value="${escapeXml(supplier.id)}">${escapeXml(supplier.name)}</option>`
   )).join("");
 
-  const orderOptions = state.orders.map((order) => `<option value="${escapeXml(order.id)}">${escapeXml(order.contractNo || order.code)}</option>`).join("");
   fillReceiptOrderOptions();
-  document.getElementById("paymentOrderSelect").innerHTML = orderOptions;
+  fillPaymentOrderOptions();
+}
+
+function fillPaymentOrderOptions() {
+  const used = new Set(state.payments.filter(p => p.id !== editingPaymentId).map(p => p.orderId));
+  const orders = state.orders.filter(order => !used.has(order.id));
+  document.getElementById('paymentOrderSelect').innerHTML = orders.map(order =>
+    `<option value="${escapeXml(order.id)}">${escapeXml(order.contractNo || order.code)}</option>`
+  ).join('') || '<option value="">Không còn hợp đồng chưa lập chứng từ thanh toán</option>';
+  document.querySelector('#paymentModal [type="submit"]').disabled = !orders.length;
 }
 
 function fillReceiptOrderOptions(includeOrderId = "") {
@@ -1086,6 +1100,17 @@ function openModal(id) {
   document.querySelectorAll(".modal").forEach((modal) => modal.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 
+  if (id === 'paymentModal') {
+    editingPaymentId = null;
+    document.getElementById(id).reset();
+    document.getElementById('paymentModalTitle').textContent = 'Thêm chứng từ thanh toán';
+    document.getElementById('paymentLegacyNote').hidden = true;
+    fillPaymentOrderOptions();
+    document.querySelector('#paymentModal [name="documentReceivedDate"]').value = formatDateDisplay(currentDateValue());
+    document.querySelector('#paymentModal [name="documentDate"]').value = formatDateDisplay(currentDateValue());
+    updatePaymentDueDate();
+  }
+
   if (id === "requestModal") {
     editingRequestId = null;
     document.getElementById("requestModalTitle").textContent = "Tạo giấy xin mua hàng";
@@ -1135,6 +1160,7 @@ function openModal(id) {
 }
 
 function closeModal() {
+  editingPaymentId = null;
   editingReceiptId = null;
   document.getElementById("modalBackdrop").hidden = true;
   editingRequestId = null;
@@ -1218,11 +1244,56 @@ function updateEditableItemsTotal(tbodyId, totalId) {
   document.getElementById(totalId).textContent = formatMoney(total);
 }
 
-function updatePaymentStatus(payment) {
-  if (Number(payment.paidAmount) >= Number(payment.amount)) return "Đã thanh toán";
-  if (Number(payment.paidAmount) > 0) return "Thanh toán một phần";
-  return new Date(payment.dueDate) < today ? "Quá hạn" : "Chưa thanh toán";
+function paymentPaidAmount(payment) {
+  return payment.paymentDate ? Number(payment.amount) : Number(payment.paidAmount || 0);
 }
+
+function updatePaymentStatus(payment) {
+  if (payment.paymentDate) return 'Đã thanh toán';
+  const paid = paymentPaidAmount(payment);
+  if (paid > 0 && paid >= Number(payment.amount)) return 'Đã thanh toán';
+  if (paid > 0) return 'Thanh toán một phần';
+  return payment.dueDate && toStorageDate(payment.dueDate) < currentDateValue() ? 'Quá hạn' : 'Chưa thanh toán';
+}
+
+function validPaymentDate(value) {
+  const iso = toStorageDate(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const date = new Date(iso + 'T00:00:00Z');
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0,10) === iso;
+}
+
+function paymentDueDate(value) {
+  if (!validPaymentDate(value)) return '';
+  const date = new Date(toStorageDate(value) + 'T00:00:00Z');
+  date.setUTCDate(date.getUTCDate() + 15);
+  return date.toISOString().slice(0,10);
+}
+
+function updatePaymentDueDate() {
+  const form = document.getElementById('paymentModal');
+  form.elements.dueDate.value = formatDateDisplay(paymentDueDate(form.elements.documentReceivedDate.value));
+  form.querySelectorAll('[data-payment-date]').forEach(input => input.setCustomValidity(
+    input.value && !validPaymentDate(input.value) ? 'Nhập ngày hợp lệ theo định dạng dd/MM/yyyy.' : ''
+  ));
+}
+
+function openEditPayment(id) {
+  const payment = state.payments.find(p => p.id === id);
+  if (!payment) return;
+  openModal('paymentModal');
+  editingPaymentId = id;
+  fillPaymentOrderOptions();
+  const form = document.getElementById('paymentModal');
+  document.getElementById('paymentModalTitle').textContent = 'Sửa chứng từ thanh toán';
+  for (const key of ['orderId','invoiceNo','amount','description']) form.elements[key].value = payment[key] ?? '';
+  for (const key of ['documentReceivedDate','documentDate','invoiceDate','paymentDate']) form.elements[key].value = formatDateDisplay(payment[key]);
+  updatePaymentDueDate();
+  document.getElementById('paymentLegacyNote').hidden = !!payment.paymentDate || !Number(payment.paidAmount);
+}
+
+document.getElementById('paymentModal').addEventListener('input', updatePaymentDueDate);
+document.getElementById('paymentModal').addEventListener('change', updatePaymentDueDate);
 
 function requestItemTemplate() {
   return `
@@ -1789,17 +1860,31 @@ document.querySelectorAll(".modal").forEach((form) => {
     }
 
     if (form.dataset.kind === "payments") {
+      updatePaymentDueDate();
+      if (!form.reportValidity()) return;
+      if (state.payments.some(p => p.orderId === data.orderId && p.id !== editingPaymentId)) {
+        alert('Hợp đồng này đã có chứng từ thanh toán. Hãy chọn hợp đồng khác.');
+        return;
+      }
+      const existing = state.payments.find(p => p.id === editingPaymentId);
+      const paymentDate = toStorageDate(data.paymentDate);
       const payment = {
-        id: makeId("pay"),
+        id: editingPaymentId || makeId("pay"),
         orderId: data.orderId,
         invoiceNo: data.invoiceNo,
-        dueDate: toStorageDate(data.dueDate),
+        documentReceivedDate: toStorageDate(data.documentReceivedDate),
+        documentDate: toStorageDate(data.documentDate),
+        invoiceDate: toStorageDate(data.invoiceDate),
+        description: data.description.trim().slice(0,50),
+        paymentDate,
+        dueDate: paymentDueDate(data.documentReceivedDate),
         amount: Number(data.amount),
-        paidAmount: Number(data.paidAmount),
+        paidAmount: paymentDate ? Number(data.amount) : existing?.paymentDate ? 0 : Number(existing?.paidAmount || 0),
         status: "Chưa thanh toán"
       };
       payment.status = updatePaymentStatus(payment);
-      state.payments.unshift(payment);
+      if (existing) Object.assign(existing, payment);
+      else state.payments.unshift(payment);
       switchView("payments");
     }
 
@@ -1894,10 +1979,15 @@ document.body.addEventListener("click", (event) => {
     order.status = action === "send-order" ? "Đã gửi NCC" : "Đã nhận";
   }
 
-  if (action === "pay-full") {
+  if (action === "edit-payment") {
+    openEditPayment(id);
+    return;
+  }
+
+  if (action === "delete-payment") {
     const payment = state.payments.find((item) => item.id === id);
-    payment.paidAmount = payment.amount;
-    payment.status = updatePaymentStatus(payment);
+    if (!payment || !confirm(`Xóa chứng từ thanh toán ${escapeXml(payment.invoiceNo)}?`)) return;
+    state.payments = state.payments.filter(item => item.id !== id);
   }
 
   saveData();
