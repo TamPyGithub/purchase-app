@@ -830,6 +830,12 @@ textarea {
 .view .mini-button { min-height: 28px; padding: 0 8px; font-size: 12px; white-space: nowrap; }
 #suppliersView td { overflow-wrap: anywhere; }
 #suppliersView .supplier-phone { white-space: nowrap; }
+#suppliersView th:nth-child(3),
+#suppliersView td:nth-child(3) {
+  min-width: 22ch;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
 #suppliersView .empty-suppliers { padding: 20px 12px; text-align: center; color: var(--muted); }
 .contract-number { width: 24ch; max-width: 100%; }
 .money-adjustment { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
