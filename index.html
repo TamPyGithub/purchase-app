@@ -491,9 +491,20 @@
           <label>Ngày lập chứng từ<input name="documentDate" required data-payment-date type="text" maxlength="10" placeholder="dd/MM/yyyy" /></label>
         </div>
         <div class="form-row">
-          <label>Số tiền<input name="amount" required min="0" step="any" type="number" /></label>
           <label>Hợp đồng mua hàng<select name="orderId" id="paymentOrderSelect" required></select></label>
         </div>
+        <div class="form-row">
+          <label>Tên nhà cung cấp<input id="paymentSupplierName" readonly /></label>
+          <label>Mã số thuế nhà cung cấp<input id="paymentSupplierTaxCode" readonly /></label>
+        </div>
+        <div class="form-row">
+          <label>Số tiền thanh toán<input id="paymentReceiptAmount" readonly /></label>
+          <label>Kết quả nghiệm thu<input id="paymentReceiptCondition" readonly /></label>
+        </div>
+        <label>Kết luận nghiệm thu<textarea id="paymentReceiptConclusion" readonly rows="2"></textarea></label>
+        <p id="paymentReceiptHint" class="form-hint" role="status"></p>
+        <button id="paymentViewReceipt" class="ghost-button" type="button" aria-expanded="false" aria-controls="paymentReceiptPreview">Mở biên bản nghiệm thu</button>
+        <section id="paymentReceiptPreview" hidden aria-label="Biên bản nghiệm thu tham khảo"></section>
         <div class="form-row">
           <label>Số hóa đơn<input name="invoiceNo" required /></label>
           <label>Ngày hóa đơn<input name="invoiceDate" required data-payment-date type="text" maxlength="10" placeholder="dd/MM/yyyy" /></label>
