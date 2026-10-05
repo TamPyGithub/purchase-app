@@ -1053,7 +1053,58 @@ function fillPaymentOrderOptions() {
     `<option value="${escapeXml(order.id)}">${escapeXml(order.contractNo || order.code)}</option>`
   ).join('') || '<option value="">Không còn hợp đồng chưa lập chứng từ thanh toán</option>';
   document.querySelector('#paymentModal [type="submit"]').disabled = !orders.length;
+  updatePaymentReceipt();
 }
+
+function selectedPaymentReceipt() {
+  const orderId = document.getElementById('paymentOrderSelect').value;
+  return state.receipts.find(receipt => receipt.orderId === orderId);
+}
+
+function validReceiptAmount(receipt) {
+  return receipt && receipt.totalAmount !== null && receipt.totalAmount !== undefined &&
+    receipt.totalAmount !== '' && Number.isFinite(Number(receipt.totalAmount)) && Number(receipt.totalAmount) >= 0;
+}
+
+function updatePaymentReceipt() {
+  const order = findOrder(document.getElementById('paymentOrderSelect').value);
+  const supplier = findSupplier(order?.supplierId);
+  const receipt = selectedPaymentReceipt();
+  document.getElementById('paymentSupplierName').value = supplier?.name || '';
+  document.getElementById('paymentSupplierTaxCode').value = supplier?.taxCode || 'Chưa có mã số thuế';
+  document.getElementById('paymentReceiptAmount').value = validReceiptAmount(receipt) ? formatMoney(receipt.totalAmount) : 'Chưa có số tiền nghiệm thu';
+  document.getElementById('paymentReceiptCondition').value = receipt?.condition || 'Chưa nghiệm thu';
+  document.getElementById('paymentReceiptConclusion').value = receipt?.conclusion || receipt?.note || '';
+  document.getElementById('paymentReceiptHint').textContent = !receipt
+    ? 'Hợp đồng chưa có biên bản nghiệm thu. Cần nghiệm thu trước khi lưu chứng từ thanh toán.'
+    : !validReceiptAmount(receipt) ? 'Biên bản nghiệm thu chưa có tổng tiền hợp lệ. Hãy bổ sung tại mục Nghiệm thu hàng.'
+    : 'Số tiền thanh toán lấy từ Tổng tiền hàng của biên bản nghiệm thu, đã gồm chiết khấu và VAT.';
+  document.querySelector('#paymentModal [type="submit"]').disabled = !order || !validReceiptAmount(receipt);
+  const button = document.getElementById('paymentViewReceipt');
+  button.disabled = !receipt;
+  button.setAttribute('aria-expanded', 'false');
+  button.textContent = 'Mở biên bản nghiệm thu';
+  const preview = document.getElementById('paymentReceiptPreview');
+  preview.hidden = true;
+  preview.innerHTML = receipt ? `<h4>Biên bản Nghiệm thu hàng</h4>
+    <p>Hợp đồng: <strong>${escapeXml(order?.contractNo || order?.code || '')}</strong> · Ngày nhận: ${escapeXml(formatDateDisplay(receipt.receivedDate))}</p>
+    <p>Chủ nhiệm nghiệm thu: ${escapeXml(receipt.acceptanceChair || 'Chưa ghi nhận')}</p>
+    <div class="table-wrap"><table><thead><tr><th>Mặt hàng</th><th>Quy cách</th><th>Số lượng</th><th>Đơn vị</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead><tbody>
+    ${(receipt.items || []).map(item => `<tr><td>${escapeXml(item.item)}</td><td>${escapeXml(item.specification || '')}</td><td>${escapeXml(item.quantity)}</td><td>${escapeXml(item.unit)}</td><td>${formatMoney(item.unitPrice)}</td><td>${formatMoney(item.estimatedPrice)}</td></tr>`).join('') || '<tr><td colspan="6">Biên bản cũ chưa có danh mục chi tiết.</td></tr>'}
+    </tbody></table></div>
+    <p>Tiền hàng chưa thuế: ${receipt.subtotalAmount == null ? 'Chưa ghi nhận' : formatMoney(receipt.subtotalAmount)} · Chiết khấu: ${formatMoney(receipt.discountAmount)} · VAT: ${formatMoney(receipt.vatAmount)}</p>
+    <p><strong>Tổng tiền hàng: ${validReceiptAmount(receipt) ? formatMoney(receipt.totalAmount) : 'Chưa ghi nhận'}</strong></p>
+    <p>Kết quả: ${escapeXml(receipt.condition || '')}</p><p class="receipt-conclusion">Kết luận: ${escapeXml(receipt.conclusion || receipt.note || '')}</p>` : '';
+}
+
+document.getElementById('paymentOrderSelect').addEventListener('change', updatePaymentReceipt);
+document.getElementById('paymentViewReceipt').addEventListener('click', () => {
+  const preview = document.getElementById('paymentReceiptPreview');
+  preview.hidden = !preview.hidden;
+  const button = document.getElementById('paymentViewReceipt');
+  button.setAttribute('aria-expanded', String(!preview.hidden));
+  button.textContent = preview.hidden ? 'Mở biên bản nghiệm thu' : 'Đóng biên bản nghiệm thu';
+});
 
 function fillReceiptOrderOptions(includeOrderId = "") {
   const recordedOrderIds = new Set(state.receipts.map((receipt) => receipt.orderId));
@@ -1290,7 +1341,8 @@ function openEditPayment(id) {
   fillPaymentOrderOptions();
   const form = document.getElementById('paymentModal');
   document.getElementById('paymentModalTitle').textContent = 'Sửa chứng từ thanh toán';
-  for (const key of ['orderId','invoiceNo','amount','description']) form.elements[key].value = payment[key] ?? '';
+  for (const key of ['orderId','invoiceNo','description']) form.elements[key].value = payment[key] ?? '';
+  updatePaymentReceipt();
   for (const key of ['documentReceivedDate','documentDate','invoiceDate','paymentDate']) form.elements[key].value = formatDateDisplay(payment[key]);
   updatePaymentDueDate();
   document.getElementById('paymentLegacyNote').hidden = !!payment.paymentDate || !Number(payment.paidAmount);
@@ -1879,6 +1931,12 @@ document.querySelectorAll(".modal").forEach((form) => {
         return;
       }
       const existing = state.payments.find(p => p.id === editingPaymentId);
+      const receipt = selectedPaymentReceipt();
+      if (!validReceiptAmount(receipt) || receipt.orderId !== data.orderId) {
+        alert('Cần có biên bản nghiệm thu với tổng tiền hợp lệ trước khi lưu chứng từ thanh toán.');
+        return;
+      }
+      const amount = Number(receipt.totalAmount);
       const paymentDate = toStorageDate(data.paymentDate);
       const payment = {
         id: editingPaymentId || makeId("pay"),
@@ -1890,8 +1948,9 @@ document.querySelectorAll(".modal").forEach((form) => {
         description: data.description.trim().slice(0,50),
         paymentDate,
         dueDate: paymentDueDate(data.documentReceivedDate),
-        amount: Number(data.amount),
-        paidAmount: paymentDate ? Number(data.amount) : existing?.paymentDate ? 0 : Number(existing?.paidAmount || 0),
+        receiptId: receipt.id,
+        amount,
+        paidAmount: paymentDate ? amount : existing?.paymentDate ? 0 : Number(existing?.paidAmount || 0),
         status: "Chưa thanh toán"
       };
       payment.status = updatePaymentStatus(payment);
