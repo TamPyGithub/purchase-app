@@ -44,6 +44,7 @@ function onlineChanges() {
     }
     if(c.kind==='orders') {guard('tenders',d.tenderId);guard('suppliers',d.supplierId);}
     if(c.kind==='receipts' || c.kind==='payments') guard('orders',d.orderId);
+    if(c.kind==='payments') guard('receipts',d.receiptId);
   }
   return {changes,guards:[...guards.values()],added_units:state.units.filter(u=>!onlineBaseline.units.includes(u))};
 }
