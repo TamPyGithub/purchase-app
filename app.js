@@ -653,10 +653,34 @@ function fillDocumentAmounts(prefix, record = {}) {
   updateDocumentTotals(prefix);
 }
 
+function updateReceiptOrderPreview() {
+  const order = findOrder(document.getElementById('receiptOrderSelect').value);
+  const button = document.getElementById('receiptViewOrder');
+  const preview = document.getElementById('receiptOrderPreview');
+  button.disabled = !order;
+  button.setAttribute('aria-expanded', 'false');
+  button.textContent = 'Mở Hợp đồng mua hàng';
+  preview.hidden = true;
+  preview.innerHTML = '';
+  if (!order) return;
+  const supplier = findSupplier(order.supplierId);
+  const items = getOrderItems(order);
+  const amounts = calculateAmounts(items, order.discountAmount, order.vatAmount);
+  preview.innerHTML = `<h4>Hợp đồng mua hàng</h4>
+    <p>Số hợp đồng: <strong>${escapeXml(order.contractNo || order.code || '')}</strong> · Ngày hợp đồng: ${escapeXml(formatDateDisplay(order.orderDate))} · Ngày giao dự kiến: ${escapeXml(formatDateDisplay(order.expectedDate))}</p>
+    <p>Nhà cung cấp: ${escapeXml(supplier?.name || 'Chưa ghi nhận')} · Mã số thuế: ${escapeXml(supplier?.taxCode || 'Chưa ghi nhận')}</p>
+    <div class="table-wrap"><table><thead><tr><th>Mặt hàng</th><th>Quy cách</th><th>Số lượng</th><th>Đơn vị</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead><tbody>
+    ${items.map(item => `<tr><td>${escapeXml(item.item)}</td><td>${escapeXml(item.specification || '')}</td><td>${escapeXml(item.quantity)}</td><td>${escapeXml(item.unit)}</td><td>${formatMoney(item.unitPrice)}</td><td>${formatMoney(item.estimatedPrice)}</td></tr>`).join('') || '<tr><td colspan="6">Hợp đồng cũ chưa có danh mục chi tiết.</td></tr>'}
+    </tbody></table></div>
+    <p>Tiền hàng chưa thuế: ${items.length ? formatMoney(amounts.subtotalAmount) : 'Chưa ghi nhận'} · Tiền chiết khấu: ${formatMoney(amounts.discountAmount)} · Tiền thuế VAT: ${formatMoney(amounts.vatAmount)}</p>
+    <p><strong>Tổng tiền hàng: ${formatMoney(getOrderTotal(order))}</strong> · Trạng thái: ${escapeXml(order.status || '')}</p>`;
+}
+
 function fillReceiptFromOrder() {
   const order = findOrder(document.getElementById('receiptOrderSelect').value);
   fillEditableItems('receiptItems', order ? getOrderItems(order) : []);
   fillDocumentAmounts('receipt', order);
+  updateReceiptOrderPreview();
 }
 
 function openEditReceipt(id) {
@@ -671,6 +695,7 @@ function openEditReceipt(id) {
   for (const field of ['acceptanceChair', 'condition', 'conclusion']) form.elements[field].value = receipt[field] || '';
   fillEditableItems('receiptItems', receipt.items || []);
   fillDocumentAmounts('receipt', receipt);
+  updateReceiptOrderPreview();
 }
 
 function getRequestTotal(request) {
@@ -2068,6 +2093,13 @@ document.body.addEventListener("click", (event) => {
 onlineStart();
 
 document.getElementById('receiptOrderSelect').addEventListener('change', fillReceiptFromOrder);
+document.getElementById('receiptViewOrder').addEventListener('click', () => {
+  const preview = document.getElementById('receiptOrderPreview');
+  preview.hidden = !preview.hidden;
+  const button = document.getElementById('receiptViewOrder');
+  button.setAttribute('aria-expanded', String(!preview.hidden));
+  button.textContent = preview.hidden ? 'Mở Hợp đồng mua hàng' : 'Đóng Hợp đồng mua hàng';
+});
 document.getElementById('addReceiptItemBtn').addEventListener('click', () => { addEditableItemRow('receiptItems'); updateDocumentTotals('receipt'); });
 document.getElementById('receiptItems').addEventListener('input', event => {
   handleFormattedPriceInput(event);

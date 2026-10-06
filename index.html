@@ -447,6 +447,8 @@
           <label>Ngày nhận<input name="receivedDate" required type="text" inputmode="numeric" maxlength="10" placeholder="dd/MM/yyyy" pattern="(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}" title="Nhập ngày theo định dạng dd/MM/yyyy" /></label>
           <label>Chủ nhiệm nghiệm thu<input name="acceptanceChair" required /></label>
         </div>
+        <button id="receiptViewOrder" class="ghost-button" type="button" aria-expanded="false" aria-controls="receiptOrderPreview">Mở Hợp đồng mua hàng</button>
+        <section id="receiptOrderPreview" hidden aria-label="Hợp đồng mua hàng tham khảo"></section>
         <div class="items-header"><strong>Danh mục thực nhận</strong><button class="mini-button" id="addReceiptItemBtn" type="button">+ Thêm dòng</button></div>
         <div class="request-items-frame">
           <table class="request-items-table">

@@ -882,11 +882,11 @@ textarea {
 }
 #supplierModal, #paymentModal { font-size: 13px; padding: 16px; gap: 8px; }
 #paymentModal { width: min(1180px, calc(100vw - 40px)); max-height: calc(100dvh - 40px); }
-#paymentReceiptPreview { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #f8faf6; }
-#paymentReceiptPreview h4 { margin: 0 0 8px; font-size: 16px; }
-#paymentReceiptPreview p { margin: 8px 0; }
+#paymentReceiptPreview, #receiptOrderPreview { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #f8faf6; }
+#paymentReceiptPreview h4, #receiptOrderPreview h4 { margin: 0 0 8px; font-size: 16px; }
+#paymentReceiptPreview p, #receiptOrderPreview p { margin: 8px 0; }
 #paymentReceiptPreview .receipt-conclusion { white-space: pre-wrap; }
-#paymentReceiptPreview th, #paymentReceiptPreview td { padding: 6px 8px; font-size: 13px; }
+#paymentReceiptPreview th, #paymentReceiptPreview td, #receiptOrderPreview th, #receiptOrderPreview td { padding: 6px 8px; font-size: 13px; }
 :is(#supplierModal, #paymentModal) .modal-header h3 { font-size: 18px; }
 :is(#supplierModal, #paymentModal) label { font-size: 13px; gap: 4px; }
 :is(#supplierModal, #paymentModal) input,
