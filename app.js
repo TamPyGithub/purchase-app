@@ -1496,7 +1496,9 @@ function tenderQuoteTemplate(quote = {}, selectedSupplierId = "") {
   return `
     <tr class="tender-quote-row">
       <td><input name="selectedQuote" type="radio" ${isSelected ? "checked" : ""} /></td>
-      <td><select name="supplierId" required>${getSupplierOptions(quoteSupplierId)}</select></td>
+      <td><input type="search" class="tender-supplier-search" aria-label="Tìm kiếm nhà cung cấp báo giá" placeholder="Tìm tên hoặc mã số thuế..." autocomplete="off" />
+        <select name="supplierId" aria-label="Nhà cung cấp báo giá" required>${getSupplierOptions(quoteSupplierId)}</select>
+        <small class="tender-supplier-search-status" role="status"></small></td>
       <td><input name="price" required inputmode="numeric" placeholder="0" value="${formatNumber(quote.price)}" /></td>
       <td><input name="deliveryDays" required min="0" type="number" value="${escapeXml(quote.deliveryDays ?? "")}" /></td>
       <td><input name="paymentTerm" placeholder="VD: 30 ngày" value="${escapeXml(quote.paymentTerm || "")}" /></td>
@@ -1504,6 +1506,24 @@ function tenderQuoteTemplate(quote = {}, selectedSupplierId = "") {
       <td><button class="icon-button remove-tender-quote" type="button" title="Xóa dòng">x</button></td>
     </tr>
   `;
+}
+
+function filterTenderQuoteSuppliers(row) {
+  const search = row.querySelector('.tender-supplier-search');
+  const select = row.querySelector('[name="supplierId"]');
+  const selectedId = select.value;
+  const terms = normalizeSearchText(search.value).split(' ').filter(Boolean);
+  const matches = state.suppliers.filter(supplier => {
+    const text = normalizeSearchText(`${supplier.name || ''} ${supplier.taxCode || ''}`);
+    return terms.every(term => text.includes(term));
+  });
+  const selected = state.suppliers.find(supplier => supplier.id === selectedId);
+  const keepSelected = selected && !matches.some(supplier => supplier.id === selectedId);
+  const suppliers = keepSelected ? [selected, ...matches] : matches;
+  select.innerHTML = suppliers.map(supplier => `<option value="${escapeXml(supplier.id)}">${escapeXml(supplier.name)}${supplier.taxCode ? ' — ' + escapeXml(supplier.taxCode) : ''}${keepSelected && supplier.id === selectedId ? ' (đang chọn)' : ''}</option>`).join('');
+  select.value = selectedId;
+  row.querySelector('.tender-supplier-search-status').textContent = terms.length
+    ? `${matches.length} nhà cung cấp phù hợp.${keepSelected ? ' Giữ nguyên nhà cung cấp đang chọn.' : ''}` : '';
 }
 
 function reindexTenderQuoteRadios() {
@@ -1759,6 +1779,10 @@ document.getElementById("orderItems").addEventListener("click", (event) => {
 });
 document.getElementById("addTenderQuoteBtn").addEventListener("click", () => addTenderQuoteRow());
 document.getElementById("tenderQuotes").addEventListener("input", (event) => {
+  if (event.target.matches('.tender-supplier-search')) {
+    filterTenderQuoteSuppliers(event.target.closest('tr'));
+    return;
+  }
   handleFormattedPriceInput(event);
 });
 document.getElementById("tenderQuotes").addEventListener("click", (event) => {
