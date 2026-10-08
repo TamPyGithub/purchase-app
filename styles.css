@@ -893,3 +893,6 @@ textarea {
 :is(#supplierModal, #paymentModal) select,
 :is(#supplierModal, #paymentModal) textarea { font: inherit; min-height: 34px; padding: 6px 9px; }
 :is(#supplierModal, #paymentModal) .primary-button { font-size: 13px; min-height: 36px; padding: 8px 12px; }
+
+#tenderModal .tender-supplier-search { margin-bottom: 5px; }
+#tenderModal .tender-supplier-search-status { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
