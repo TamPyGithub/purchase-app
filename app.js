@@ -1517,13 +1517,11 @@ function filterTenderQuoteSuppliers(row) {
     const text = normalizeSearchText(`${supplier.name || ''} ${supplier.taxCode || ''}`);
     return terms.every(term => text.includes(term));
   });
-  const selected = state.suppliers.find(supplier => supplier.id === selectedId);
-  const keepSelected = selected && !matches.some(supplier => supplier.id === selectedId);
-  const suppliers = keepSelected ? [selected, ...matches] : matches;
-  select.innerHTML = suppliers.map(supplier => `<option value="${escapeXml(supplier.id)}">${escapeXml(supplier.name)}${supplier.taxCode ? ' — ' + escapeXml(supplier.taxCode) : ''}${keepSelected && supplier.id === selectedId ? ' (đang chọn)' : ''}</option>`).join('');
-  select.value = selectedId;
+  select.innerHTML = matches.map(supplier => `<option value="${escapeXml(supplier.id)}">${escapeXml(supplier.name)}${supplier.taxCode ? ' — ' + escapeXml(supplier.taxCode) : ''}</option>`).join('')
+    || '<option value="">Không có nhà cung cấp phù hợp</option>';
+  select.value = matches.some(supplier => supplier.id === selectedId) ? selectedId : (matches[0]?.id || '');
   row.querySelector('.tender-supplier-search-status').textContent = terms.length
-    ? `${matches.length} nhà cung cấp phù hợp.${keepSelected ? ' Giữ nguyên nhà cung cấp đang chọn.' : ''}` : '';
+    ? `${matches.length} nhà cung cấp phù hợp.` : '';
 }
 
 function reindexTenderQuoteRadios() {
