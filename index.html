@@ -521,6 +521,12 @@
       </form>
     </div>
 
+    <dialog id="tenderSupplierPicker" aria-labelledby="tenderSupplierPickerTitle">
+      <div class="modal-header"><h3 id="tenderSupplierPickerTitle">Chọn nhà cung cấp</h3><button type="button" class="ghost-button" id="closeTenderSupplierPicker" aria-label="Đóng danh sách nhà cung cấp">×</button></div>
+      <label>Tìm kiếm nhà cung cấp<input id="tenderSupplierQuery" type="search" placeholder="Nhập tên hoặc mã số thuế..." autocomplete="off" /></label>
+      <p id="tenderSupplierCount" role="status"></p>
+      <div class="tender-supplier-results table-wrap"><table><thead><tr><th>Nhà cung cấp</th><th>Mã số thuế</th><th></th></tr></thead><tbody id="tenderSupplierResults"></tbody></table></div>
+    </dialog>
     <datalist id="unitOptions"></datalist>
     <script src="./online.js"></script>
 <script src="./app.js"></script>
