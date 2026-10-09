@@ -895,10 +895,18 @@ function renderDashboard() {
       .filter((order) => order.supplierId === supplier.id)
       .reduce((sum, order) => sum + Number(getOrderTotal(order)), 0);
     return { supplier, total };
-  }).filter((row) => row.total > 0);
-  const maxSpend = Math.max(...spendBySupplier.map((row) => row.total), 1);
+  }).filter((row) => row.total > 0)
+    .sort((a, b) => b.total - a.total || a.supplier.name.localeCompare(b.supplier.name, 'vi'));
+  const displayedSupplierSpend = spendBySupplier.slice(0, 25);
+  if (spendBySupplier.length > 25) {
+    displayedSupplierSpend.push({
+      supplier: { name: 'Các nhà cung cấp khác' },
+      total: spendBySupplier.slice(25).reduce((sum, row) => sum + row.total, 0)
+    });
+  }
+  const maxSpend = Math.max(...displayedSupplierSpend.map((row) => row.total), 1);
 
-  document.getElementById("supplierSpend").innerHTML = spendBySupplier.length ? spendBySupplier.map(({ supplier, total }) => `
+  document.getElementById("supplierSpend").innerHTML = displayedSupplierSpend.length ? displayedSupplierSpend.map(({ supplier, total }) => `
     <div class="bar-row">
       <div class="bar-meta">
         <strong>${escapeXml(supplier.name)}</strong>
