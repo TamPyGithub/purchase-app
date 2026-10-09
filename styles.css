@@ -907,4 +907,14 @@ textarea {
 #tenderSupplierPicker input { width: 100%; }
 #tenderSupplierPicker .tender-supplier-results { max-height: 55dvh; overflow: auto; }
 #tenderSupplierPicker th, #tenderSupplierPicker td { padding: 8px; font-size: 13px; }
-#tenderSupplierPicker td:nth-child(2) { white-space: nowrap; }
+#tenderSupplierPicker table { width: 100%; min-width: 0; table-layout: fixed; }
+#tenderSupplierPicker th, #tenderSupplierPicker td { white-space: normal; overflow-wrap: anywhere; }
+#tenderSupplierPicker th:nth-child(2) { width: 170px; }
+#tenderSupplierPicker th:last-child { width: 80px; }
+#tenderSupplierPicker td:last-child { text-align: right; }
+#tenderSupplierPicker td:last-child button { white-space: nowrap; }
+@media (max-width: 520px) {
+  #tenderSupplierPicker th:nth-child(2) { width: 115px; }
+  #tenderSupplierPicker th:last-child { width: 70px; }
+  #tenderSupplierPicker th, #tenderSupplierPicker td { padding: 6px 4px; }
+}
