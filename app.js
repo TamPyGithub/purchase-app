@@ -1441,7 +1441,9 @@ function openSupplierFromOrder() {
   showOnlyModal("supplierModal");
 }
 
+let tenderSupplierTargetIndex = null;
 function openSupplierFromTender() {
+  tenderSupplierTargetIndex = null;
   editingSupplierId = null;
   supplierModalContext = "tender";
   document.getElementById("supplierModal").reset();
@@ -1496,9 +1498,11 @@ function tenderQuoteTemplate(quote = {}, selectedSupplierId = "") {
   return `
     <tr class="tender-quote-row">
       <td><input name="selectedQuote" type="radio" ${isSelected ? "checked" : ""} /></td>
-      <td><input type="search" class="tender-supplier-search" aria-label="Tìm kiếm nhà cung cấp báo giá" placeholder="Tìm tên hoặc mã số thuế..." autocomplete="off" />
-        <select name="supplierId" aria-label="Nhà cung cấp báo giá" required>${getSupplierOptions(quoteSupplierId)}</select>
-        <small class="tender-supplier-search-status" role="status"></small></td>
+      <td><div class="tender-supplier-control">
+        <div class="tender-supplier-value"><input class="tender-supplier-name" aria-label="Nhà cung cấp báo giá" readonly placeholder="Chọn nhà cung cấp" value="${escapeXml(findSupplier(quoteSupplierId || state.suppliers[0]?.id)?.name || '')}" /><button type="button" class="tender-supplier-add" aria-label="Thêm nhà cung cấp cho dòng báo giá" title="Thêm nhà cung cấp mới">+</button></div>
+        <button class="mini-button tender-supplier-choose" type="button" aria-haspopup="dialog">⌕ Chọn nhà cung cấp</button>
+        <select name="supplierId" hidden aria-label="Mã nhà cung cấp báo giá">${getSupplierOptions(quoteSupplierId)}</select>
+      </div></td>
       <td><input name="price" required inputmode="numeric" placeholder="0" value="${formatNumber(quote.price)}" /></td>
       <td><input name="deliveryDays" required min="0" type="number" value="${escapeXml(quote.deliveryDays ?? "")}" /></td>
       <td><input name="paymentTerm" placeholder="VD: 30 ngày" value="${escapeXml(quote.paymentTerm || "")}" /></td>
@@ -1508,20 +1512,22 @@ function tenderQuoteTemplate(quote = {}, selectedSupplierId = "") {
   `;
 }
 
-function filterTenderQuoteSuppliers(row) {
-  const search = row.querySelector('.tender-supplier-search');
-  const select = row.querySelector('[name="supplierId"]');
-  const selectedId = select.value;
-  const terms = normalizeSearchText(search.value).split(' ').filter(Boolean);
+let tenderSupplierPickerRow = null;
+function renderTenderSupplierPicker() {
+  const terms = normalizeSearchText(document.getElementById('tenderSupplierQuery').value).split(' ').filter(Boolean);
   const matches = state.suppliers.filter(supplier => {
-    const text = normalizeSearchText(`${supplier.name || ''} ${supplier.taxCode || ''}`);
+    const text = normalizeSearchText(supplier.name + ' ' + (supplier.taxCode || ''));
     return terms.every(term => text.includes(term));
   });
-  select.innerHTML = matches.map(supplier => `<option value="${escapeXml(supplier.id)}">${escapeXml(supplier.name)}${supplier.taxCode ? ' — ' + escapeXml(supplier.taxCode) : ''}</option>`).join('')
-    || '<option value="">Không có nhà cung cấp phù hợp</option>';
-  select.value = matches.some(supplier => supplier.id === selectedId) ? selectedId : (matches[0]?.id || '');
-  row.querySelector('.tender-supplier-search-status').textContent = terms.length
-    ? `${matches.length} nhà cung cấp phù hợp.` : '';
+  document.getElementById('tenderSupplierResults').innerHTML = matches.map(supplier => '<tr><td>' + escapeXml(supplier.name) + '</td><td>' + escapeXml(supplier.taxCode || '—') + '</td><td><button type="button" class="mini-button" data-pick-supplier="' + escapeXml(supplier.id) + '" aria-label="Chọn ' + escapeXml(supplier.name) + '">Chọn</button></td></tr>').join('') || '<tr><td colspan="3">Không tìm thấy nhà cung cấp phù hợp.</td></tr>';
+  document.getElementById('tenderSupplierCount').textContent = matches.length + ' nhà cung cấp';
+}
+function openTenderSupplierPicker(row) {
+  tenderSupplierPickerRow = row;
+  document.getElementById('tenderSupplierQuery').value = '';
+  renderTenderSupplierPicker();
+  document.getElementById('tenderSupplierPicker').showModal();
+  document.getElementById('tenderSupplierQuery').focus();
 }
 
 function reindexTenderQuoteRadios() {
@@ -1581,8 +1587,10 @@ function restoreTenderDraft(draft, newSupplierId = "") {
   updateEditableItemsTotal("tenderRequestItems", "tenderRequestTotal");
 
   const quotes = [...(draft.quotes || [])];
-  if (newSupplierId) quotes.push({ supplierId: newSupplierId, price: 0, deliveryDays: 0, paymentTerm: "", note: "" });
-  const selectedSupplierId = newSupplierId || quotes[draft.selectedIndex]?.supplierId || quotes[0]?.supplierId || "";
+  const replaceRow = newSupplierId && Number.isInteger(tenderSupplierTargetIndex) && quotes[tenderSupplierTargetIndex];
+  if (replaceRow) quotes[tenderSupplierTargetIndex] = { ...quotes[tenderSupplierTargetIndex], supplierId: newSupplierId };
+  else if (newSupplierId) quotes.push({ supplierId: newSupplierId, price: 0, deliveryDays: 0, paymentTerm: "", note: "" });
+  const selectedSupplierId = (!replaceRow && newSupplierId) || quotes[draft.selectedIndex]?.supplierId || quotes[0]?.supplierId || "";
   document.getElementById("tenderQuotes").innerHTML = "";
   quotes.forEach((quote) => addTenderQuoteRow(quote, selectedSupplierId));
   if (!quotes.length) addTenderQuoteRow();
@@ -1777,13 +1785,36 @@ document.getElementById("orderItems").addEventListener("click", (event) => {
 });
 document.getElementById("addTenderQuoteBtn").addEventListener("click", () => addTenderQuoteRow());
 document.getElementById("tenderQuotes").addEventListener("input", (event) => {
-  if (event.target.matches('.tender-supplier-search')) {
-    filterTenderQuoteSuppliers(event.target.closest('tr'));
-    return;
-  }
   handleFormattedPriceInput(event);
 });
+document.getElementById('tenderSupplierQuery').addEventListener('input', renderTenderSupplierPicker);
+document.getElementById('closeTenderSupplierPicker').addEventListener('click', () => document.getElementById('tenderSupplierPicker').close());
+document.getElementById('tenderSupplierResults').addEventListener('click', event => {
+  const button = event.target.closest('[data-pick-supplier]');
+  if (!button || !tenderSupplierPickerRow?.isConnected) return;
+  const supplier = findSupplier(button.dataset.pickSupplier);
+  if (!supplier) return;
+  tenderSupplierPickerRow.querySelector('[name="supplierId"]').value = supplier.id;
+  tenderSupplierPickerRow.querySelector('.tender-supplier-name').value = supplier.name;
+  document.getElementById('tenderSupplierPicker').close();
+});
+document.getElementById('tenderSupplierPicker').addEventListener('close', () => {
+  tenderSupplierPickerRow?.querySelector('.tender-supplier-choose')?.focus();
+  tenderSupplierPickerRow = null;
+});
 document.getElementById("tenderQuotes").addEventListener("click", (event) => {
+  if (event.target.closest('.tender-supplier-choose')) {
+    openTenderSupplierPicker(event.target.closest('tr'));
+    return;
+  }
+  if (event.target.closest('.tender-supplier-add')) {
+    const index = [...document.querySelectorAll('#tenderQuotes tr')].indexOf(event.target.closest('tr'));
+    openSupplierFromTender();
+    tenderSupplierTargetIndex = index;
+    document.getElementById('supplierSubmitBtn').textContent = 'Lưu và chọn NCC';
+    return;
+  }
+
   const button = event.target.closest(".remove-tender-quote");
   if (!button) return;
 
