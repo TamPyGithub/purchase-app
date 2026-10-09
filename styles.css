@@ -896,3 +896,15 @@ textarea {
 
 #tenderModal .tender-supplier-search { margin-bottom: 5px; }
 #tenderModal .tender-supplier-search-status { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.tender-supplier-control { display: flex; align-items: center; gap: 6px; min-width: 360px; }
+.tender-supplier-value { display: flex; flex: 1; min-width: 140px; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+#tenderModal .tender-supplier-name { border: 0; border-radius: 0; min-width: 0; background: white; }
+.tender-supplier-add { border: 0; background: white; color: #2563eb; font-size: 22px; padding: 0 9px; cursor: pointer; }
+.tender-supplier-choose { white-space: nowrap; }
+#tenderSupplierPicker { width: min(850px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); border: 1px solid var(--line); border-radius: 12px; padding: 18px; color: var(--text); }
+#tenderSupplierPicker::backdrop { background: #0006; }
+#tenderSupplierPicker label { display: grid; gap: 6px; }
+#tenderSupplierPicker input { width: 100%; }
+#tenderSupplierPicker .tender-supplier-results { max-height: 55dvh; overflow: auto; }
+#tenderSupplierPicker th, #tenderSupplierPicker td { padding: 8px; font-size: 13px; }
+#tenderSupplierPicker td:nth-child(2) { white-space: nowrap; }
