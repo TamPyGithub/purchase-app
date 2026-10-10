@@ -918,3 +918,18 @@ textarea {
   #tenderSupplierPicker th:last-child { width: 70px; }
   #tenderSupplierPicker th, #tenderSupplierPicker td { padding: 6px 4px; }
 }
+.department-control, .department-value { display: flex; align-items: center; gap: 6px; }
+.department-value { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+#requestModal #requestDepartment { border: 0; min-width: 0; width: 100%; }
+#chooseDepartmentBtn { white-space: nowrap; }
+#departmentPicker, #departmentAdd { width: min(720px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 18px; color: var(--text); }
+#departmentPicker::backdrop, #departmentAdd::backdrop { background: #0006; }
+#departmentPicker label, #departmentAdd label { display: grid; gap: 6px; }
+#departmentPicker input, #departmentAdd input { width: 100%; }
+#departmentPicker .department-results { max-height: 50dvh; overflow: auto; margin-bottom: 12px; }
+#departmentPicker table { width: 100%; min-width: 0; table-layout: fixed; }
+#departmentPicker th, #departmentPicker td { padding: 8px; font-size: 13px; white-space: normal; overflow-wrap: anywhere; }
+#departmentPicker th:last-child { width: 80px; }
+#departmentPicker td:last-child { text-align: right; }
+#departmentPicker button { white-space: nowrap; }
+@media (max-width: 480px) { .department-control { flex-wrap: wrap; } .department-value { flex-basis: 100%; } }

@@ -1520,6 +1520,69 @@ function tenderQuoteTemplate(quote = {}, selectedSupplierId = "") {
   `;
 }
 
+function getRequestDepartments() {
+  const names = new Map();
+  for (const value of [...state.requests.map(request => request.department), document.getElementById('requestDepartment').value]) {
+    const name = String(value || '').trim().replace(/\s+/g, ' ');
+    const key = normalizeSearchText(name);
+    if (key && !names.has(key)) names.set(key, name);
+  }
+  return [...names.values()].sort((a, b) => a.localeCompare(b, 'vi'));
+}
+function renderDepartmentPicker() {
+  const terms = normalizeSearchText(document.getElementById('departmentQuery').value).split(' ').filter(Boolean);
+  const matches = getRequestDepartments().filter(name => terms.every(term => normalizeSearchText(name).includes(term)));
+  document.getElementById('departmentResults').innerHTML = matches.map(name => '<tr><td>' + escapeXml(name) + '</td><td><button type="button" class="mini-button" data-pick-department="' + escapeXml(name) + '" aria-label="Chọn ' + escapeXml(name) + '">Chọn</button></td></tr>').join('') || '<tr><td colspan="2">Không tìm thấy phòng ban. Bạn có thể thêm phòng ban mới.</td></tr>';
+  document.getElementById('departmentCount').textContent = matches.length + ' phòng ban';
+}
+function openDepartmentAdd(value = '') {
+  document.getElementById('departmentAddForm').reset();
+  document.getElementById('newDepartmentName').value = value;
+  document.getElementById('newDepartmentName').setCustomValidity('');
+  document.getElementById('departmentAdd').showModal();
+  document.getElementById('newDepartmentName').focus();
+}
+document.getElementById('chooseDepartmentBtn').addEventListener('click', () => {
+  document.getElementById('departmentQuery').value = '';
+  renderDepartmentPicker();
+  document.getElementById('departmentPicker').showModal();
+  document.getElementById('departmentQuery').focus();
+});
+document.getElementById('departmentQuery').addEventListener('input', renderDepartmentPicker);
+document.getElementById('closeDepartmentPicker').addEventListener('click', () => document.getElementById('departmentPicker').close());
+document.getElementById('departmentResults').addEventListener('click', event => {
+  const button = event.target.closest('[data-pick-department]');
+  if (!button) return;
+  document.getElementById('requestDepartment').value = button.dataset.pickDepartment;
+  document.getElementById('departmentPicker').close();
+});
+document.getElementById('addDepartmentBtn').addEventListener('click', () => openDepartmentAdd());
+document.getElementById('newDepartmentFromPicker').addEventListener('click', () => openDepartmentAdd(document.getElementById('departmentQuery').value));
+document.getElementById('closeDepartmentAdd').addEventListener('click', () => document.getElementById('departmentAdd').close());
+document.getElementById('newDepartmentName').addEventListener('input', event => event.target.setCustomValidity(''));
+document.getElementById('departmentAddForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const input = document.getElementById('newDepartmentName');
+  const name = input.value.trim().replace(/\s+/g, ' ');
+  if (!name) {
+    input.setCustomValidity('Vui lòng nhập tên phòng ban.');
+    input.reportValidity();
+    return;
+  }
+  const existing = getRequestDepartments().find(value => normalizeSearchText(value) === normalizeSearchText(name));
+  document.getElementById('requestDepartment').value = existing || name;
+  document.getElementById('departmentAdd').close();
+  document.getElementById('departmentPicker').close();
+  document.getElementById('chooseDepartmentBtn').focus();
+});
+document.getElementById('requestModal').addEventListener('submit', event => {
+  if (!document.getElementById('requestDepartment').value.trim()) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    document.getElementById('chooseDepartmentBtn').click();
+  }
+});
+
 let tenderSupplierPickerRow = null;
 function renderTenderSupplierPicker() {
   const terms = normalizeSearchText(document.getElementById('tenderSupplierQuery').value).split(' ').filter(Boolean);

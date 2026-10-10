@@ -287,7 +287,11 @@
           <label>Số giấy xin mua<input name="code" id="requestCodeInput" required placeholder="Nhập số giấy xin mua" /></label>
           <label>Ngày giấy xin mua<input name="requestDate" id="requestDateInput" required type="text" inputmode="numeric" maxlength="10" placeholder="dd/MM/yyyy" pattern="(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}" title="Nhập ngày theo định dạng dd/MM/yyyy" /></label>
         </div>
-        <label>Phòng ban<input name="department" required placeholder="Ví dụ: Sản xuất" /></label>
+        <label for="requestDepartment">Phòng ban</label>
+        <div class="department-control">
+          <div class="department-value"><input id="requestDepartment" name="department" readonly required placeholder="Chọn phòng ban" /><button id="addDepartmentBtn" type="button" class="tender-supplier-add" aria-label="Thêm phòng ban mới" title="Thêm phòng ban mới">+</button></div>
+          <button id="chooseDepartmentBtn" class="mini-button" type="button" aria-haspopup="dialog">⌕ Chọn phòng ban</button>
+        </div>
         <div class="items-header">
           <strong>Danh sách mặt hàng</strong>
           <button class="mini-button" id="addRequestItemBtn" type="button">+ Thêm dòng</button>
@@ -526,6 +530,21 @@
       <label>Tìm kiếm nhà cung cấp<input id="tenderSupplierQuery" type="search" placeholder="Nhập tên hoặc mã số thuế..." autocomplete="off" /></label>
       <p id="tenderSupplierCount" role="status"></p>
       <div class="tender-supplier-results table-wrap"><table><thead><tr><th>Nhà cung cấp</th><th>Mã số thuế</th><th></th></tr></thead><tbody id="tenderSupplierResults"></tbody></table></div>
+    </dialog>
+    <dialog id="departmentPicker" aria-labelledby="departmentPickerTitle">
+      <div class="modal-header"><h3 id="departmentPickerTitle">Chọn phòng ban</h3><button type="button" class="ghost-button" id="closeDepartmentPicker" aria-label="Đóng danh sách phòng ban">×</button></div>
+      <label>Tìm kiếm phòng ban<input id="departmentQuery" type="search" placeholder="Nhập tên phòng ban..." autocomplete="off" /></label>
+      <p id="departmentCount" role="status"></p>
+      <div class="department-results table-wrap"><table><thead><tr><th>Phòng ban</th><th></th></tr></thead><tbody id="departmentResults"></tbody></table></div>
+      <button id="newDepartmentFromPicker" type="button" class="mini-button">+ Thêm phòng ban mới</button>
+    </dialog>
+    <dialog id="departmentAdd" aria-labelledby="departmentAddTitle">
+      <form id="departmentAddForm">
+        <div class="modal-header"><h3 id="departmentAddTitle">Thêm phòng ban mới</h3><button type="button" class="ghost-button" id="closeDepartmentAdd" aria-label="Đóng thêm phòng ban">×</button></div>
+        <label>Tên phòng ban<input id="newDepartmentName" required maxlength="150" autocomplete="off" /></label>
+        <p>Phòng ban mới được lưu cùng giấy xin mua và có thể chọn lại cho các giấy xin mua sau.</p>
+        <button type="submit" class="primary-button">Thêm và chọn</button>
+      </form>
     </dialog>
     <datalist id="unitOptions"></datalist>
     <script src="./online.js"></script>
