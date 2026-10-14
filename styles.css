@@ -933,3 +933,14 @@ textarea {
 #departmentPicker td:last-child { text-align: right; }
 #departmentPicker button { white-space: nowrap; }
 @media (max-width: 480px) { .department-control { flex-wrap: wrap; } .department-value { flex-basis: 100%; } }
+
+#paymentModal { width: min(1320px, calc(100vw - 32px)); }
+.payment-fields { display: grid; gap: 10px; padding: 0; border: 0; margin: 0; min-width: 0; }
+.payment-fields[hidden] { display: none; }
+#paymentModal .department-control input { min-width: 0; flex: 1; }
+#paymentModal .department-control button { white-space: nowrap; }
+.payment-type-filter { max-width: 320px; margin-bottom: 12px; }
+#paymentPayeeAdd { width: min(650px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+#paymentPayeeAdd::backdrop { background: #0006; }
+#paymentPayeeAdd form { display: grid; gap: 12px; }
+#paymentPayeeAddError { color: #b42318; margin: 0; }

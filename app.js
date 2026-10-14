@@ -832,7 +832,8 @@ function applyMainSearches() {
       const cells = name === 'dashboard' ? row : [...row.cells].slice(0, -1);
       const visibleText = name === 'dashboard' ? cells.textContent : cells.map(cell => cell.textContent).join(' ');
       const text = normalizeSearchText(visibleText + ' ' + (name === 'dashboard' ? '' : mainSearchRecordText(records[index] || {}, name)));
-      row.hidden = !terms.every(term => text.includes(term));
+      const type = name === 'payments' ? document.getElementById('paymentTypeFilter').value : '';
+      row.hidden = !terms.every(term => text.includes(term)) || !!(type && (isOtherPayment(records[index]) ? 'other' : 'contract') !== type);
       if (!row.hidden) matches++;
     });
     form.querySelector('.search-status').textContent = terms.length
@@ -845,13 +846,14 @@ function renderDashboard() {
   const pendingRequests = state.requests.filter((request) => request.status === "Chờ duyệt").length;
   const activeOrders = state.orders.filter((order) => order.status !== "Đã nhận").length;
   const totalSpend = state.orders.reduce((sum, order) => sum + Number(getOrderTotal(order)), 0);
+  const otherSpend = state.payments.filter(isOtherPayment).reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const unpaid = state.payments.reduce((sum, payment) => sum + Math.max(0, Number(payment.amount) - paymentPaidAmount(payment)), 0);
 
   document.getElementById("metricsGrid").innerHTML = [
     ["Giấy xin mua chờ duyệt", pendingRequests, "Cần quản lý xử lý"],
     ["Hợp đồng đang theo dõi", activeOrders, "Hợp đồng chưa hoàn tất"],
-    ["Tổng giá trị hợp đồng", formatMoney(totalSpend), "Đã ghi nhận"],
-    ["Công nợ còn lại", formatMoney(unpaid), "Theo hóa đơn"]
+    ["Tổng chi phí", formatMoney(totalSpend + otherSpend), "Hợp đồng và thanh toán khác"],
+    ["Công nợ còn lại", formatMoney(unpaid), "Theo chứng từ thanh toán"]
   ].map(([label, value, hint]) => `
     <article class="metric-card">
       <span>${label}</span>
@@ -872,8 +874,8 @@ function renderDashboard() {
       value: formatDateDisplay(order.expectedDate)
     })),
     ...state.payments.filter((payment) => updatePaymentStatus(payment) !== "Đã thanh toán").map((payment) => ({
-      title: `${escapeXml(payment.invoiceNo)} cần thanh toán`,
-      detail: findOrder(payment.orderId)?.contractNo || findOrder(payment.orderId)?.code || "Hợp đồng",
+      title: `${payment.invoiceNo || payment.description || "Chứng từ"} cần thanh toán`,
+      detail: isOtherPayment(payment) ? paymentSupplier(payment)?.name || payment.payeeName || "Thanh toán khác" : findOrder(payment.orderId)?.contractNo || findOrder(payment.orderId)?.code || "Hợp đồng",
       value: formatMoney(Math.max(0, payment.amount - paymentPaidAmount(payment)))
     }))
   ];
@@ -893,7 +895,7 @@ function renderDashboard() {
   const spendBySupplier = state.suppliers.map((supplier) => {
     const total = state.orders
       .filter((order) => order.supplierId === supplier.id)
-      .reduce((sum, order) => sum + Number(getOrderTotal(order)), 0);
+      .reduce((sum, order) => sum + Number(getOrderTotal(order)), 0) + state.payments.filter(p => isOtherPayment(p) && p.supplierId === supplier.id).reduce((sum, p) => sum + Number(p.amount || 0), 0);
     return { supplier, total };
   }).filter((row) => row.total > 0)
     .sort((a, b) => b.total - a.total || a.supplier.name.localeCompare(b.supplier.name, 'vi'));
@@ -922,6 +924,10 @@ function renderDashboard() {
     const department = String(request?.department || '').trim() || 'Chưa xác định phòng ban';
     const amount = Number(getOrderTotal(order));
     departments.set(department, (departments.get(department) || 0) + (Number.isFinite(amount) ? amount : 0));
+  }
+  for (const payment of state.payments.filter(isOtherPayment)) {
+    const department = payment.department || 'Chưa xác định phòng ban';
+    departments.set(department, (departments.get(department) || 0) + Number(payment.amount || 0));
   }
   const departmentTotals = [...departments].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'vi'));
   const maxDepartmentSpend = Math.max(...departmentTotals.map(([, total]) => Math.abs(total)), 1);
@@ -1042,15 +1048,71 @@ function renderReceipts() {
   }).join("");
 }
 
+let pendingPaymentPayee = null;
+function setPaymentType() {
+  const form = document.getElementById('paymentModal');
+  const other = form.elements.paymentType.value === 'other';
+  document.getElementById('paymentContractFields').hidden = other;
+  document.getElementById('paymentContractFields').disabled = other;
+  document.getElementById('paymentOtherFields').hidden = !other;
+  document.getElementById('paymentOtherFields').disabled = !other;
+  form.elements.invoiceNo.required = !other;
+  form.elements.invoiceDate.required = !other;
+  form.elements.dueDate.readOnly = !other;
+  updatePaymentReceipt();
+}
+function selectPaymentPayee(supplier) {
+  document.getElementById('paymentPayeeId').value = supplier.id || '';
+  document.getElementById('paymentPayeeName').value = supplier.name || '';
+  document.getElementById('paymentPayeeTax').value = supplier.taxCode || '';
+}
+document.getElementById('paymentType').addEventListener('change', setPaymentType);
+document.getElementById('paymentTypeFilter').addEventListener('change', applyMainSearches);
+document.getElementById('paymentChoosePayee').addEventListener('click', () => {
+  openTenderSupplierPicker(null);
+  supplierPickerCallback = selectPaymentPayee;
+});
+document.getElementById('paymentChooseDepartment').addEventListener('click', () => {
+  departmentTarget = 'paymentDepartment';
+  document.getElementById('departmentQuery').value = '';
+  renderDepartmentPicker();
+  document.getElementById('departmentPicker').showModal();
+  document.getElementById('departmentQuery').focus();
+});
+document.getElementById('paymentAddPayee').addEventListener('click', () => {
+  document.getElementById('paymentPayeeAddForm').reset();
+  document.getElementById('paymentPayeeAddError').textContent = '';
+  document.getElementById('paymentPayeeAdd').showModal();
+});
+document.getElementById('closePaymentPayeeAdd').addEventListener('click', () => document.getElementById('paymentPayeeAdd').close());
+document.getElementById('paymentPayeeAddForm').addEventListener('submit', event => {
+  event.preventDefault();
+  const data = Object.fromEntries(new FormData(event.currentTarget));
+  const name = data.name.trim(), taxCode = normalizeTaxCode(data.taxCode);
+  if (!name) { document.getElementById('paymentPayeeAddError').textContent = 'Vui lòng nhập tên người nhận tiền.'; return; }
+  const existing = state.suppliers.find(s => taxCode ? normalizeTaxCode(s.taxCode) === taxCode : !s.taxCode && normalizeSearchText(s.name) === normalizeSearchText(name));
+  pendingPaymentPayee = existing ? null : {id:makeId('sup'),name,taxCode,category:'Khác',contact:'',phone:'',email:''};
+  selectPaymentPayee(existing || pendingPaymentPayee);
+  document.getElementById('paymentPayeeAdd').close();
+});
+function isOtherPayment(payment) { return payment.paymentType === 'other'; }
+function paymentSupplier(payment) { return findSupplier(isOtherPayment(payment) ? payment.supplierId : findOrder(payment.orderId)?.supplierId); }
+function paymentDepartment(payment) {
+  const order = findOrder(payment.orderId);
+  return isOtherPayment(payment) ? payment.department || '' : (findRequest(order?.requestId) || findRequest(findTender(order?.tenderId)?.requestId))?.department || '';
+}
 function renderPayments() {
   document.getElementById("paymentsTable").innerHTML = state.payments.map((payment) => {
     const order = findOrder(payment.orderId);
     return `
       <tr>
+        <td>${isOtherPayment(payment) ? 'Thanh toán khác' : 'Theo hợp đồng mua hàng'}</td>
+        <td>${escapeXml(paymentSupplier(payment)?.name || payment.payeeName || '—')}</td>
+        <td>${escapeXml(paymentDepartment(payment) || '—')}</td>
         <td>${escapeXml(formatDateDisplay(payment.documentReceivedDate))}</td>
         <td>${escapeXml(formatDateDisplay(payment.documentDate))}</td>
         <td>${formatMoney(payment.amount)}</td>
-        <td>${escapeXml(order?.contractNo || order?.code || "Không rõ")}</td>
+        <td>${escapeXml(order?.contractNo || order?.code || (isOtherPayment(payment) ? "—" : "Không rõ"))}</td>
         <td><strong>${escapeXml(payment.invoiceNo)}</strong></td>
         <td>${escapeXml(formatDateDisplay(payment.invoiceDate))}</td>
         <td>${escapeXml(payment.description || '')}</td>
@@ -1100,6 +1162,7 @@ function validReceiptAmount(receipt) {
 }
 
 function updatePaymentReceipt() {
+  if (document.getElementById('paymentType').value === 'other') { document.querySelector('#paymentModal [type="submit"]').disabled = false; return; }
   const order = findOrder(document.getElementById('paymentOrderSelect').value);
   const supplier = findSupplier(order?.supplierId);
   const receipt = selectedPaymentReceipt();
@@ -1190,7 +1253,9 @@ function openModal(id) {
 
   if (id === 'paymentModal') {
     editingPaymentId = null;
+    pendingPaymentPayee = null;
     document.getElementById(id).reset();
+    setPaymentType();
     document.getElementById('paymentModalTitle').textContent = 'Thêm chứng từ thanh toán';
     document.getElementById('paymentLegacyNote').hidden = true;
     fillPaymentOrderOptions();
@@ -1358,11 +1423,11 @@ function paymentDueDate(value) {
   return date.toISOString().slice(0,10);
 }
 
-function updatePaymentDueDate() {
+function updatePaymentDueDate(event) {
   const form = document.getElementById('paymentModal');
-  form.elements.dueDate.value = formatDateDisplay(paymentDueDate(form.elements.documentReceivedDate.value));
+  if (form.elements.paymentType.value !== 'other' || event?.target === form.elements.documentReceivedDate || !form.elements.dueDate.value) form.elements.dueDate.value = formatDateDisplay(paymentDueDate(form.elements.documentReceivedDate.value));
   form.querySelectorAll('[data-payment-date]').forEach(input => input.setCustomValidity(
-    input.value && !validPaymentDate(input.value) ? 'Nhập ngày hợp lệ theo định dạng dd/MM/yyyy.' : ''
+    !input.disabled && input.value && !validPaymentDate(input.value) ? 'Nhập ngày hợp lệ theo định dạng dd/MM/yyyy.' : ''
   ));
 }
 
@@ -1374,9 +1439,17 @@ function openEditPayment(id) {
   fillPaymentOrderOptions();
   const form = document.getElementById('paymentModal');
   document.getElementById('paymentModalTitle').textContent = 'Sửa chứng từ thanh toán';
+  form.elements.paymentType.value = isOtherPayment(payment) ? 'other' : 'contract';
+  setPaymentType();
   for (const key of ['orderId','invoiceNo','description']) form.elements[key].value = payment[key] ?? '';
+  if (isOtherPayment(payment)) {
+    selectPaymentPayee(paymentSupplier(payment) || {id:payment.supplierId,name:payment.payeeName,taxCode:payment.payeeTaxCode});
+    form.elements.amount.value = formatNumber(payment.amount);
+    form.elements.department.value = payment.department || '';
+  }
   updatePaymentReceipt();
   for (const key of ['documentReceivedDate','documentDate','invoiceDate','paymentDate']) form.elements[key].value = formatDateDisplay(payment[key]);
+  form.elements.dueDate.value = formatDateDisplay(payment.dueDate);
   updatePaymentDueDate();
   document.getElementById('paymentLegacyNote').hidden = !!payment.paymentDate || !Number(payment.paidAmount);
 }
@@ -1481,6 +1554,7 @@ function deleteSupplier(supplierId) {
   const supplier = findSupplier(supplierId);
   if (!supplier) return;
 
+  if (state.payments.some(payment => isOtherPayment(payment) && payment.supplierId === supplierId)) { alert('Nhà cung cấp đang được dùng trong chứng từ thanh toán. Không thể xóa.'); return; }
   const isConfirmed = window.confirm(`Bạn có chắc muốn xóa nhà cung cấp ${escapeXml(supplier.name)}?`);
   if (!isConfirmed) return;
 
@@ -1520,9 +1594,10 @@ function tenderQuoteTemplate(quote = {}, selectedSupplierId = "") {
   `;
 }
 
+let departmentTarget = 'requestDepartment';
 function getRequestDepartments() {
   const names = new Map();
-  for (const value of [...state.requests.map(request => request.department), document.getElementById('requestDepartment').value]) {
+  for (const value of [...state.requests.map(request => request.department), ...state.payments.filter(isOtherPayment).map(payment => payment.department), document.getElementById('requestDepartment').value, document.getElementById('paymentDepartment').value]) {
     const name = String(value || '').trim().replace(/\s+/g, ' ');
     const key = normalizeSearchText(name);
     if (key && !names.has(key)) names.set(key, name);
@@ -1543,6 +1618,7 @@ function openDepartmentAdd(value = '') {
   document.getElementById('newDepartmentName').focus();
 }
 document.getElementById('chooseDepartmentBtn').addEventListener('click', () => {
+  departmentTarget = 'requestDepartment';
   document.getElementById('departmentQuery').value = '';
   renderDepartmentPicker();
   document.getElementById('departmentPicker').showModal();
@@ -1553,10 +1629,10 @@ document.getElementById('closeDepartmentPicker').addEventListener('click', () =>
 document.getElementById('departmentResults').addEventListener('click', event => {
   const button = event.target.closest('[data-pick-department]');
   if (!button) return;
-  document.getElementById('requestDepartment').value = button.dataset.pickDepartment;
+  document.getElementById(departmentTarget).value = button.dataset.pickDepartment;
   document.getElementById('departmentPicker').close();
 });
-document.getElementById('addDepartmentBtn').addEventListener('click', () => openDepartmentAdd());
+document.getElementById('addDepartmentBtn').addEventListener('click', () => { departmentTarget = 'requestDepartment'; openDepartmentAdd(); });
 document.getElementById('newDepartmentFromPicker').addEventListener('click', () => openDepartmentAdd(document.getElementById('departmentQuery').value));
 document.getElementById('closeDepartmentAdd').addEventListener('click', () => document.getElementById('departmentAdd').close());
 document.getElementById('newDepartmentName').addEventListener('input', event => event.target.setCustomValidity(''));
@@ -1570,10 +1646,10 @@ document.getElementById('departmentAddForm').addEventListener('submit', event =>
     return;
   }
   const existing = getRequestDepartments().find(value => normalizeSearchText(value) === normalizeSearchText(name));
-  document.getElementById('requestDepartment').value = existing || name;
+  document.getElementById(departmentTarget).value = existing || name;
   document.getElementById('departmentAdd').close();
   document.getElementById('departmentPicker').close();
-  document.getElementById('chooseDepartmentBtn').focus();
+  document.getElementById(departmentTarget === 'requestDepartment' ? 'chooseDepartmentBtn' : 'paymentChooseDepartment').focus();
 });
 document.getElementById('requestModal').addEventListener('submit', event => {
   if (!document.getElementById('requestDepartment').value.trim()) {
@@ -1584,6 +1660,7 @@ document.getElementById('requestModal').addEventListener('submit', event => {
 });
 
 let tenderSupplierPickerRow = null;
+let supplierPickerCallback = null;
 function renderTenderSupplierPicker() {
   const terms = normalizeSearchText(document.getElementById('tenderSupplierQuery').value).split(' ').filter(Boolean);
   const matches = state.suppliers.filter(supplier => {
@@ -1594,6 +1671,7 @@ function renderTenderSupplierPicker() {
   document.getElementById('tenderSupplierCount').textContent = matches.length + ' nhà cung cấp';
 }
 function openTenderSupplierPicker(row) {
+  supplierPickerCallback = null;
   tenderSupplierPickerRow = row;
   document.getElementById('tenderSupplierQuery').value = '';
   renderTenderSupplierPicker();
@@ -1862,9 +1940,10 @@ document.getElementById('tenderSupplierQuery').addEventListener('input', renderT
 document.getElementById('closeTenderSupplierPicker').addEventListener('click', () => document.getElementById('tenderSupplierPicker').close());
 document.getElementById('tenderSupplierResults').addEventListener('click', event => {
   const button = event.target.closest('[data-pick-supplier]');
-  if (!button || !tenderSupplierPickerRow?.isConnected) return;
+  if (!button || (!supplierPickerCallback && !tenderSupplierPickerRow?.isConnected)) return;
   const supplier = findSupplier(button.dataset.pickSupplier);
   if (!supplier) return;
+  if (supplierPickerCallback) { supplierPickerCallback(supplier); document.getElementById('tenderSupplierPicker').close(); return; }
   tenderSupplierPickerRow.querySelector('[name="supplierId"]').value = supplier.id;
   tenderSupplierPickerRow.querySelector('.tender-supplier-name').value = supplier.name;
   document.getElementById('tenderSupplierPicker').close();
@@ -1872,6 +1951,7 @@ document.getElementById('tenderSupplierResults').addEventListener('click', event
 document.getElementById('tenderSupplierPicker').addEventListener('close', () => {
   tenderSupplierPickerRow?.querySelector('.tender-supplier-choose')?.focus();
   tenderSupplierPickerRow = null;
+  supplierPickerCallback = null;
 });
 document.getElementById("tenderQuotes").addEventListener("click", (event) => {
   if (event.target.closest('.tender-supplier-choose')) {
@@ -2075,37 +2155,41 @@ document.querySelectorAll(".modal").forEach((form) => {
     if (form.dataset.kind === "payments") {
       updatePaymentDueDate();
       if (!form.reportValidity()) return;
-      if (state.payments.some(p => p.orderId === data.orderId && p.id !== editingPaymentId)) {
-        alert('Hợp đồng này đã có chứng từ thanh toán. Hãy chọn hợp đồng khác.');
-        return;
+      const other = data.paymentType === 'other';
+      if (!other && state.payments.some(p => p.orderId === data.orderId && p.id !== editingPaymentId)) {
+        alert('Hợp đồng này đã có chứng từ thanh toán. Hãy chọn hợp đồng khác.'); return;
       }
       const existing = state.payments.find(p => p.id === editingPaymentId);
-      const receipt = selectedPaymentReceipt();
-      if (!validReceiptAmount(receipt) || receipt.orderId !== data.orderId) {
-        alert('Cần có biên bản nghiệm thu với tổng tiền hợp lệ trước khi lưu chứng từ thanh toán.');
-        return;
+      const receipt = other ? null : selectedPaymentReceipt();
+      if (!other && (!validReceiptAmount(receipt) || receipt.orderId !== data.orderId)) {
+        alert('Cần có biên bản nghiệm thu với tổng tiền hợp lệ trước khi lưu chứng từ thanh toán.'); return;
       }
-      const amount = Number(receipt.totalAmount);
+      let payee = other ? findSupplier(data.supplierId) || (pendingPaymentPayee?.id === data.supplierId ? pendingPaymentPayee : null) : null;
+      const amount = other ? Number(String(data.amount).replace(/\./g, '').replace(/,/g, '.')) : Number(receipt.totalAmount);
+      if (other && (!payee || !data.department.trim() || !Number.isFinite(amount) || amount <= 0)) {
+        alert('Hãy chọn người nhận tiền, phòng ban và nhập số tiền lớn hơn 0.'); return;
+      }
+      if (other && pendingPaymentPayee?.id === payee.id) {
+        const duplicate = payee.taxCode && state.suppliers.find(s => normalizeTaxCode(s.taxCode) === normalizeTaxCode(payee.taxCode));
+        if (duplicate) payee = duplicate;
+        else state.suppliers.push(payee);
+      }
       const paymentDate = toStorageDate(data.paymentDate);
       const payment = {
-        id: editingPaymentId || makeId("pay"),
-        orderId: data.orderId,
-        invoiceNo: data.invoiceNo,
-        documentReceivedDate: toStorageDate(data.documentReceivedDate),
-        documentDate: toStorageDate(data.documentDate),
-        invoiceDate: toStorageDate(data.invoiceDate),
-        description: data.description.trim().slice(0,50),
-        paymentDate,
-        dueDate: paymentDueDate(data.documentReceivedDate),
-        receiptId: receipt.id,
-        amount,
-        paidAmount: paymentDate ? amount : existing?.paymentDate ? 0 : Number(existing?.paidAmount || 0),
-        status: "Chưa thanh toán"
+        id: editingPaymentId || makeId('pay'), paymentType: other ? 'other' : 'contract',
+        orderId: other ? '' : data.orderId, receiptId: receipt?.id || '',
+        supplierId: other ? payee.id : '', payeeName: other ? payee.name : '', payeeTaxCode: other ? payee.taxCode || '' : '',
+        department: other ? data.department.trim() : '',
+        invoiceNo: data.invoiceNo.trim(), invoiceDate: toStorageDate(data.invoiceDate),
+        documentReceivedDate: toStorageDate(data.documentReceivedDate), documentDate: toStorageDate(data.documentDate),
+        description: data.description.trim().slice(0,200), paymentDate,
+        dueDate: other ? toStorageDate(data.dueDate) : paymentDueDate(data.documentReceivedDate), amount,
+        paidAmount: paymentDate ? amount : existing?.paymentDate ? 0 : Number(existing?.paidAmount || 0)
       };
       payment.status = updatePaymentStatus(payment);
-      if (existing) Object.assign(existing, payment);
-      else state.payments.unshift(payment);
-      switchView("payments");
+      if (existing) Object.assign(existing, payment); else state.payments.unshift(payment);
+      pendingPaymentPayee = null;
+      switchView('payments');
     }
 
     saveData();
