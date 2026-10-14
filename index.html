@@ -104,14 +104,14 @@
             <section class="panel">
               <div class="panel-header">
                 <h3>Chi phí theo nhà cung cấp</h3>
-                <span>Toàn bộ hợp đồng</span>
+                <span>Hợp đồng và thanh toán khác</span>
               </div>
               <div class="bar-list" id="supplierSpend"></div>
             </section>
             <section class="panel">
               <div class="panel-header">
                 <h3>Chi phí theo phòng ban</h3>
-                <span>Toàn bộ hợp đồng · gồm chiết khấu và VAT</span>
+                <span>Hợp đồng và thanh toán khác</span>
               </div>
               <div class="bar-list" id="departmentSpend"></div>
             </section>
@@ -249,11 +249,12 @@
             </div>
             <button class="primary-button" data-open-modal="paymentModal" type="button">+ Thêm chứng từ thanh toán</button>
           </div>
+          <label class="payment-type-filter">Loại chứng từ<select id="paymentTypeFilter"><option value="">Tất cả</option><option value="contract">Theo hợp đồng mua hàng</option><option value="other">Thanh toán khác</option></select></label>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Ngày nhận chứng từ</th><th>Ngày lập chứng từ</th><th>Số tiền</th>
+                  <th>Loại chứng từ</th><th>Đơn vị/người nhận tiền</th><th>Phòng ban</th><th>Ngày nhận chứng từ</th><th>Ngày lập chứng từ</th><th>Số tiền</th>
                   <th>Hợp đồng mua hàng</th><th>Số hóa đơn</th><th>Ngày hóa đơn</th>
                   <th>Nội dung thanh toán</th><th>Hạn thanh toán</th><th>Ngày thanh toán</th>
                   <th>Trạng thái</th><th>Thao tác</th>
@@ -492,10 +493,12 @@
           <h3 id="paymentModalTitle">Thêm chứng từ thanh toán</h3>
           <button class="ghost-button close-modal" type="button">×</button>
         </div>
+        <label>Loại chứng từ<select name="paymentType" id="paymentType"><option value="contract">Theo hợp đồng mua hàng</option><option value="other">Thanh toán khác</option></select></label>
         <div class="form-row">
           <label>Ngày nhận chứng từ<input name="documentReceivedDate" required data-payment-date type="text" maxlength="10" placeholder="dd/MM/yyyy" /></label>
           <label>Ngày lập chứng từ<input name="documentDate" required data-payment-date type="text" maxlength="10" placeholder="dd/MM/yyyy" /></label>
         </div>
+        <fieldset id="paymentContractFields" class="payment-fields">
         <div class="form-row">
           <label>Hợp đồng mua hàng<select name="orderId" id="paymentOrderSelect" required></select></label>
         </div>
@@ -511,13 +514,20 @@
         <p id="paymentReceiptHint" class="form-hint" role="status"></p>
         <button id="paymentViewReceipt" class="ghost-button" type="button" aria-expanded="false" aria-controls="paymentReceiptPreview">Mở biên bản nghiệm thu</button>
         <section id="paymentReceiptPreview" hidden aria-label="Biên bản nghiệm thu tham khảo"></section>
+        </fieldset>
+        <fieldset id="paymentOtherFields" class="payment-fields" hidden disabled>
+          <label for="paymentPayeeName">Đơn vị/người nhận tiền</label>
+          <div class="department-control"><input id="paymentPayeeName" readonly placeholder="Chọn đơn vị/người nhận tiền" /><input name="supplierId" id="paymentPayeeId" type="hidden" /><button id="paymentChoosePayee" class="mini-button" type="button">Chọn người nhận</button><button id="paymentAddPayee" class="mini-button" type="button">+ Thêm mới</button></div>
+          <div class="form-row"><label>Mã số thuế<input id="paymentPayeeTax" readonly /></label><label>Số tiền thanh toán<input name="amount" id="paymentOtherAmount" inputmode="decimal" required placeholder="Nhập số tiền" /></label></div>
+          <label for="paymentDepartment">Phòng ban</label><div class="department-control"><input id="paymentDepartment" name="department" readonly placeholder="Chọn phòng ban" /><button id="paymentChooseDepartment" type="button" class="mini-button">Chọn phòng ban</button></div>
+        </fieldset>
         <div class="form-row">
           <label>Số hóa đơn<input name="invoiceNo" required /></label>
           <label>Ngày hóa đơn<input name="invoiceDate" required data-payment-date type="text" maxlength="10" placeholder="dd/MM/yyyy" /></label>
         </div>
-        <label>Nội dung thanh toán<input name="description" maxlength="50" /></label>
+        <label>Nội dung thanh toán<input name="description" maxlength="200" /></label>
         <div class="form-row">
-          <label>Hạn thanh toán<input name="dueDate" readonly type="text" placeholder="Ngày nhận chứng từ + 15 ngày" /></label>
+          <label>Hạn thanh toán<input name="dueDate" required data-payment-date type="text" placeholder="Ngày nhận chứng từ + 15 ngày" /></label>
           <label>Ngày thanh toán<input name="paymentDate" data-payment-date type="text" maxlength="10" placeholder="dd/MM/yyyy (có thể để trống)" /></label>
         </div>
         <p id="paymentLegacyNote" hidden>Chứng từ cũ đã ghi nhận tiền thanh toán nhưng chưa có ngày thanh toán. Số tiền đã trả được giữ nguyên; hãy bổ sung ngày thực tế khi có thông tin.</p>
@@ -531,6 +541,13 @@
       <p id="tenderSupplierCount" role="status"></p>
       <div class="tender-supplier-results table-wrap"><table><thead><tr><th>Nhà cung cấp</th><th>Mã số thuế</th><th></th></tr></thead><tbody id="tenderSupplierResults"></tbody></table></div>
     </dialog>
+    <dialog id="paymentPayeeAdd" aria-labelledby="paymentPayeeAddTitle"><form id="paymentPayeeAddForm">
+      <div class="modal-header"><h3 id="paymentPayeeAddTitle">Thêm đơn vị/người nhận tiền</h3><button type="button" class="ghost-button" id="closePaymentPayeeAdd" aria-label="Đóng thêm người nhận">×</button></div>
+      <label>Tên đơn vị/người nhận tiền<input name="name" required maxlength="200" /></label>
+      <label>Mã số thuế (nếu có)<input name="taxCode" maxlength="20" /></label>
+      <p id="paymentPayeeAddError" role="alert"></p><p>Hồ sơ mới được lưu khi bạn lưu chứng từ thanh toán.</p>
+      <button type="submit" class="primary-button">Thêm và chọn</button>
+    </form></dialog>
     <dialog id="departmentPicker" aria-labelledby="departmentPickerTitle">
       <div class="modal-header"><h3 id="departmentPickerTitle">Chọn phòng ban</h3><button type="button" class="ghost-button" id="closeDepartmentPicker" aria-label="Đóng danh sách phòng ban">×</button></div>
       <label>Tìm kiếm phòng ban<input id="departmentQuery" type="search" placeholder="Nhập tên phòng ban..." autocomplete="off" /></label>
