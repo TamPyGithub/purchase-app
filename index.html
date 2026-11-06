@@ -275,8 +275,8 @@
         </section>
         <section class="view" id="reportsView">
           <div class="report-controls">
-            <label>Loại báo cáo<select id="reportKind"><option value="payments">Chi tiết thanh toán</option><option value="unpaid">Các khoản chưa thanh toán</option><option value="departments">Tổng hợp theo phòng ban</option></select></label>
-            <label>Phòng ban<select id="reportDepartment"><option value="">Tất cả</option></select></label>
+            <label>Loại báo cáo<select id="reportKind"><option value="payments">Chi tiết thanh toán</option><option value="unpaid">Các khoản chưa thanh toán</option><option value="departments">Tổng hợp mua hàng theo phòng ban</option><option value="suppliers">Tổng hợp theo nhà cung cấp/người nhận tiền</option><option value="progress">Theo dõi tiến độ mua hàng</option><option value="paid">Các khoản đã thanh toán trong kỳ</option></select></label>
+            <label id="reportDueControl" hidden>Nhóm khoản chưa trả<select id="reportDueFilter"><option value="all">Tất cả khoản chưa trả</option><option value="future">Chưa đến hạn</option><option value="today">Đến hạn hôm nay</option><option value="overdue">Quá hạn</option></select></label><label>Phòng ban<select id="reportDepartment"><option value="">Tất cả</option></select></label>
             <label>Đơn vị/người nhận<select id="reportSupplier"><option value="">Tất cả</option></select></label>
             <button id="viewReport" type="button" class="primary-button">Xem báo cáo</button><button id="printReport" type="button" class="ghost-button">In / Lưu PDF</button><button id="exportReport" type="button" class="ghost-button">Xuất Excel</button>
           </div><article id="reportOutput" class="report-paper"></article>
