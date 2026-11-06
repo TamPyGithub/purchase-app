@@ -944,3 +944,44 @@ textarea {
 #paymentPayeeAdd::backdrop { background: #0006; }
 #paymentPayeeAdd form { display: grid; gap: 12px; }
 #paymentPayeeAddError { color: #b42318; margin: 0; }
+.period-filter,.report-controls { display:flex; flex-wrap:wrap; gap:10px; align-items:end; padding:14px; margin-bottom:16px; background:#fff; border:1px solid var(--line); border-radius:10px; }
+.period-filter label,.report-controls label { display:grid; gap:5px; font-size:13px; }
+#periodStatus { flex-basis:100%; margin:0; font-size:12px; color:var(--muted); }
+.report-paper { padding:22px; background:white; border:1px solid var(--line); }
+.report-paper header { text-align:center; }
+.report-paper header p { margin:6px 0; }
+.report-basis { font-size:12px; }
+.report-table-wrap { overflow:auto; }
+.report-paper table { font-size:12px; width:100%; }
+.report-paper th,.report-paper td { padding:7px 5px; white-space:normal; overflow-wrap:anywhere; }
+.report-money { text-align:right; }
+.report-total { font-weight:700; background:#eef3ef; }
+.report-signatures { display:flex; justify-content:space-around; text-align:center; margin-top:30px; padding-bottom:65px; }
+@media print {
+ @page { size:A4 landscape; margin:10mm; }
+ html,body,.app-shell,.main { min-height:0!important; height:auto!important; }
+ body { background:white!important; color:black!important; font-size:9pt; }
+ body > :not(.app-shell),.sidebar,.topbar,#periodFilter,.report-controls,.main-search,.view:not(#reportsView) { display:none!important; }
+ .app-shell,.main,#reportsView { display:block!important; margin:0!important; padding:0!important; width:100%!important; }
+ .report-paper { border:0; padding:0; }
+ .report-table-wrap { overflow:visible; }
+ .report-paper table { min-width:0!important; table-layout:fixed; border-collapse:collapse; font-size:7pt; }
+ .report-paper th,.report-paper td { border:1px solid #888; padding:3px; }
+ .report-paper tr:last-child td { border-bottom:1px solid #888; }
+ .report-paper thead { display:table-header-group; }
+ .report-paper tr,.report-signatures { break-inside:avoid; }
+ .report-signatures { margin-top:12mm; padding-bottom:15mm; }
+}
+.report-paper td { white-space:pre-line; }
+.report-paper .payment-report { min-width:1250px; }
+@media print {
+ .report-paper .payment-report { min-width:0; }
+ .payment-report th:nth-child(1) { width:3%; }
+ .payment-report th:nth-child(2) { width:14%; }
+ .payment-report th:nth-child(3) { width:8%; }
+ .payment-report th:nth-child(4) { width:9%; }
+ .payment-report th:nth-child(5) { width:16%; }
+ .payment-report th:nth-child(6),.payment-report th:nth-child(7) { width:10%; }
+ .payment-report th:nth-child(8),.payment-report th:nth-child(9),.payment-report th:nth-child(10) { width:8%; }
+ .payment-report th:nth-child(11) { width:6%; }
+}
