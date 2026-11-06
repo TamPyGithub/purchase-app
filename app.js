@@ -32,8 +32,78 @@ function refreshReportOptions() {
   supplier.innerHTML='<option value="">Tất cả</option>'+state.suppliers.map(p=>`<option value="${escapeXml(p.id)}">${escapeXml(p.name)}</option>`).join('');
   department.value=names.includes(d)?d:'';supplier.value=state.suppliers.some(p=>p.id===s)?s:'';
 }
+function reportSummary(title,basis,headers,money,rows) {
+  const total=headers.map((_,i)=>money.includes(i)?rows.reduce((s,r)=>s+Number(r[i]||0),0):i===1?'Tổng cộng':'');
+  return {title,basis,headers,money,rows,total};
+}
+function reportOrderDepartment(order) {
+  return (findRequest(order.requestId)||findRequest(findTender(order.tenderId)?.requestId))?.department||'';
+}
+function reportRemaining(p) { return Math.max(0,Number(p.amount||0)-paymentPaidAmount(p)); }
+function reportDue(p) {
+  const due=toStorageDate(p.dueDate||''),today=currentDateValue();
+  if(!validPaymentDate(due))return {label:'Chưa có hạn',days:''};
+  const days=Math.max(0,Math.round((Date.parse(today+'T00:00:00Z')-Date.parse(due+'T00:00:00Z'))/86400000));
+  return {label:days?'Quá hạn':due===today?'Đến hạn hôm nay':'Chưa đến hạn',days};
+}
+function buildAdditionalReport(kind,selected) {
+  if(kind==='suppliers') {
+    const groups=new Map();
+    const group=(id,name)=>{const key=id||'name:'+name; if(!groups.has(key))groups.set(key,{name:name||'Chưa xác định',contract:0,other:0,paid:0,left:0});return groups.get(key)};
+    for(const o of state.orders)if(dateInPeriod(o.orderDate)&&selected(reportOrderDepartment(o),o.supplierId))group(o.supplierId,findSupplier(o.supplierId)?.name).contract+=Number(getOrderTotal(o));
+    for(const p of state.payments) {
+      const supplier=paymentSupplier(p),id=supplier?.id||p.supplierId,name=supplier?.name||p.payeeName;
+      if(!selected(paymentDepartment(p),id))continue;
+      if(isOtherPayment(p)&&dateInPeriod(p.documentDate))group(id,name).other+=Number(p.amount||0);
+      if(recordInPeriod(p,'payments')) {const r=group(id,name);r.paid+=paymentPaidAmount(p);r.left+=reportRemaining(p)}
+    }
+    const rows=[...groups.values()].sort((a,b)=>b.contract+b.other-a.contract-a.other).map((r,i)=>[i+1,r.name,r.contract,r.other,r.paid,r.left]);
+    return reportSummary('Tổng hợp theo nhà cung cấp/người nhận tiền','Giá trị hợp đồng theo ngày hợp đồng; thanh toán khác theo ngày lập. Đã trả/còn phải trả theo chứng từ lọc bằng '+paymentDateLabel()+', tính tại hiện tại. Các cột dùng căn cứ ngày khác nhau; không lấy giá trị hợp đồng trừ đã trả để tính công nợ.', ['STT','Nhà cung cấp/người nhận','Giá trị hợp đồng','Thanh toán khác','Đã trả hiện tại','Còn phải trả hiện tại'],[2,3,4,5],rows);
+  }
+  if(kind==='progress') {
+    const rows=[];
+    for(const request of state.requests) {
+      if(!dateInPeriod(request.requestDate))continue;
+      const tenders=state.tenders.filter(t=>t.requestId===request.id);
+      const orders=state.orders.filter(o=>o.requestId===request.id||tenders.some(t=>t.id===o.tenderId));
+      if(!selected(request.department,supplierIdForRequest()))continue;
+      function supplierIdForRequest(){return orders.find(o=>selected(request.department,o.supplierId))?.supplierId||tenders.find(t=>selected(request.department,t.selectedSupplierId))?.selectedSupplierId||''}
+      const scopedOrders=orders.filter(o=>selected(request.department,o.supplierId));
+      const scopedTenders=tenders.filter(t=>selected(request.department,t.selectedSupplierId));
+      const receipts=state.receipts.filter(r=>scopedOrders.some(o=>o.id===r.orderId));
+      const payments=state.payments.filter(p=>!isOtherPayment(p)&&scopedOrders.some(o=>o.id===p.orderId));
+      const missing=[];
+      if(!scopedTenders.length)missing.push('Chưa có kết quả đấu thầu');
+      else if(scopedTenders.some(t=>!t.selectedSupplierId))missing.push('Chưa chọn nhà cung cấp');
+      if(!scopedOrders.length)missing.push('Chưa có hợp đồng');
+      for(const o of scopedOrders) {
+        const code=o.contractNo||o.code||o.id;
+        if(!receipts.some(r=>r.orderId===o.id))missing.push(code+': chưa nghiệm thu');
+        else if(receipts.some(r=>r.orderId===o.id&&r.condition!=='Đạt'))missing.push(code+': cần xử lý kết quả nghiệm thu');
+        if(!payments.some(p=>p.orderId===o.id))missing.push(code+': chưa lập chứng từ thanh toán');
+      }
+      if(payments.some(p=>reportRemaining(p)>0))missing.push('Còn tiền chưa thanh toán');
+      rows.push([rows.length+1,request.code||request.id,formatDateDisplay(request.requestDate),request.department||'—',scopedTenders.map(t=>formatDateDisplay(t.tenderDate)||'Chưa có ngày').join('\n')||'Chưa có',scopedOrders.map(o=>o.contractNo||o.code||o.id).join('\n')||'Chưa có',receipts.map(r=>formatDateDisplay(r.receivedDate)+' · '+(r.condition||'Đã ghi nhận')).join('\n')||'Chưa có',payments.length+' chứng từ',missing.join('\n')||'Đã đủ hồ sơ và thanh toán']);
+    }
+    return reportSummary('Theo dõi tiến độ mua hàng','Lọc theo ngày giấy xin mua; hiển thị các bước liên kết đến hiện tại, kể cả phát sinh ngoài kỳ. Khi chọn nhà cung cấp chỉ xét hợp đồng/đấu thầu của nhà cung cấp đó. Kết quả nghiệm thu được hiển thị để đối chiếu.', ['STT','Giấy xin mua','Ngày giấy','Phòng ban','Ngày đấu thầu','Hợp đồng','Nghiệm thu / Kết quả','Thanh toán','Bước chưa hoàn thành'],[],rows);
+  }
+  if(kind==='paid') {
+    const payments=state.payments.filter(p=>validPaymentDate(p.paymentDate)&&dateInPeriod(p.paymentDate)&&paymentPaidAmount(p)>0&&selected(paymentDepartment(p),paymentSupplier(p)?.id||p.supplierId)).sort((a,b)=>toStorageDate(a.paymentDate).localeCompare(toStorageDate(b.paymentDate)));
+    const rows=payments.map((p,i)=>[i+1,formatDateDisplay(p.paymentDate),paymentSupplier(p)?.name||p.payeeName||'Chưa xác định',paymentDepartment(p)||'—',p.invoiceNo||'—',p.description||'',paymentPaidAmount(p)]);
+    return reportSummary('Các khoản đã thanh toán trong kỳ','Luôn lọc theo Ngày thanh toán, không theo ô Ngày lọc thanh toán. Chứng từ đã trả nhưng chưa có ngày được loại khỏi báo cáo. App hiện lưu một ngày thanh toán cho mỗi chứng từ, chưa theo dõi riêng từng lần trả.', ['STT','Ngày thanh toán','Người nhận','Phòng ban','Số hóa đơn','Nội dung','Số tiền đã trả'],[6],rows);
+  }
+  if(kind==='unpaid') {
+    const mode=document.getElementById('reportDueFilter').value;
+    const payments=state.payments.filter(p=>recordInPeriod(p,'payments')&&reportRemaining(p)>0&&selected(paymentDepartment(p),paymentSupplier(p)?.id||p.supplierId)).filter(p=>mode==='all'||(mode==='overdue'?reportDue(p).label==='Quá hạn':mode==='today'?reportDue(p).label==='Đến hạn hôm nay':reportDue(p).label==='Chưa đến hạn')).sort((a,b)=>(toStorageDate(a.dueDate)||'9999').localeCompare(toStorageDate(b.dueDate)||'9999'));
+    const rows=payments.map((p,i)=>[i+1,paymentSupplier(p)?.name||p.payeeName||'Chưa xác định',paymentDepartment(p)||'—',p.invoiceNo||'—',p.description||'',reportRemaining(p),formatDateDisplay(p.dueDate)||'—',reportDue(p).days,reportDue(p).label]);
+    return reportSummary('Các khoản chưa thanh toán/đến hạn/quá hạn','Lọc theo '+paymentDateLabel()+'. Còn phải trả và số ngày quá hạn tính tại '+formatDateDisplay(currentDateValue())+', không phải số dư cuối kỳ. Nhóm: '+document.getElementById('reportDueFilter').selectedOptions[0].text+'.', ['STT','Người nhận','Phòng ban','Số hóa đơn','Nội dung','Còn phải trả','Hạn thanh toán','Số ngày quá hạn','Tình trạng hạn'],[5],rows);
+  }
+  return null;
+}
 function buildReport(kind, department='', supplierId='') {
   const selected=(dept,sup)=> (!department || dept===department) && (!supplierId || sup===supplierId);
+  const additional=buildAdditionalReport(kind,selected);
+  if(additional)return additional;
   if(kind==='departments') {
     const groups=new Map();
     const add=(dept,amount,other)=>{dept=dept||'Chưa xác định phòng ban';const r=groups.get(dept)||{name:dept,count:0,contracts:0,other:0};if(other)r.other+=amount;else{r.count++;r.contracts+=amount}groups.set(dept,r)};
@@ -43,19 +113,20 @@ function buildReport(kind, department='', supplierId='') {
     }
     for(const p of state.payments)if(isOtherPayment(p)&&dateInPeriod(p.documentDate)&&selected(p.department||'',p.supplierId))add(p.department,Number(p.amount||0),true);
     const rows=[...groups.values()].sort((a,b)=>(b.contracts+b.other)-(a.contracts+a.other)).map((r,i)=>[i+1,r.name,r.count,r.contracts,r.other,r.contracts+r.other]);
-    return {title:'Tổng hợp theo phòng ban',basis:'Hợp đồng theo ngày đặt; thanh toán khác theo ngày lập chứng từ. Giá trị đã gồm chiết khấu và VAT; không cộng lại chứng từ thanh toán theo hợp đồng.',headers:['STT','Phòng ban','Số hợp đồng','Giá trị hợp đồng','Thanh toán khác','Tổng chi phí'],money:[3,4,5],rows,total:['','Tổng cộng',rows.reduce((s,r)=>s+r[2],0),... [3,4,5].map(c=>rows.reduce((s,r)=>s+r[c],0))]};
+    return {title:'Tổng hợp mua hàng theo phòng ban',basis:'Hợp đồng theo ngày đặt; thanh toán khác theo ngày lập chứng từ. Giá trị đã gồm chiết khấu và VAT; không cộng lại chứng từ thanh toán theo hợp đồng.',headers:['STT','Phòng ban','Số hợp đồng','Giá trị hợp đồng','Thanh toán khác','Tổng chi phí'],money:[3,4,5],rows,total:['','Tổng cộng',rows.reduce((s,r)=>s+r[2],0),... [3,4,5].map(c=>rows.reduce((s,r)=>s+r[c],0))]};
   }
   const unpaid=kind==='unpaid';
   const payments=state.payments.filter(p=>recordInPeriod(p,'payments')&&selected(paymentDepartment(p),paymentSupplier(p)?.id||p.supplierId)&&(!unpaid||Number(p.amount)-paymentPaidAmount(p)>0));
   payments.sort((a,b)=>(toStorageDate(a[reportPeriod.paymentDate]||'')).localeCompare(toStorageDate(b[reportPeriod.paymentDate]||''))||a.id.localeCompare(b.id));
   const rows=payments.map((p,i)=>[i+1,(paymentSupplier(p)?.name||p.payeeName||'Chưa xác định')+'\n'+(isOtherPayment(p)?'Thanh toán khác':'Theo hợp đồng'),paymentDepartment(p)||'—',(p.invoiceNo||'—')+'\n'+(formatDateDisplay(p.invoiceDate)||''),p.description||'','Nhận: '+formatDateDisplay(p.documentReceivedDate)+'\nLập: '+formatDateDisplay(p.documentDate),'Hạn: '+formatDateDisplay(p.dueDate)+'\nTrả: '+(formatDateDisplay(p.paymentDate)||'—'),Number(p.amount||0),paymentPaidAmount(p),Math.max(0,Number(p.amount)-paymentPaidAmount(p)),updatePaymentStatus(p)]);
-  return {title:unpaid?'Các khoản chưa thanh toán':'Chi tiết thanh toán',basis:'Lọc theo '+paymentDateLabel()+'. Số đã trả và còn lại là số hiện tại của các chứng từ được chọn, không phải số dư tại cuối kỳ. Khoản trả từng phần chỉ ghi trong nội dung chưa được tự tính.',headers:['STT','Người nhận / Loại','Phòng ban','Hóa đơn / Ngày','Nội dung','Ngày nhận / Lập CT','Hạn / Ngày trả','Số tiền','Đã trả hiện tại','Còn lại hiện tại','Trạng thái'],money:[7,8,9],rows,total:['','Tổng cộng','','','','','',...[7,8,9].map(c=>rows.reduce((s,r)=>s+r[c],0)),'']};
+  return {title:unpaid?'Các khoản chưa thanh toán':'Chi tiết chứng từ thanh toán',basis:'Lọc theo '+paymentDateLabel()+'. Số đã trả và còn lại là số hiện tại của các chứng từ được chọn, không phải số dư tại cuối kỳ. Khoản trả từng phần chỉ ghi trong nội dung chưa được tự tính.',headers:['STT','Người nhận / Loại','Phòng ban','Hóa đơn / Ngày','Nội dung','Ngày nhận / Lập CT','Hạn / Ngày trả','Số tiền','Đã trả hiện tại','Còn lại hiện tại','Trạng thái'],money:[7,8,9],rows,total:['','Tổng cộng','','','','','',...[7,8,9].map(c=>rows.reduce((s,r)=>s+r[c],0)),'']};
 }
 function renderReport() {
   const kind=document.getElementById('reportKind').value,department=document.getElementById('reportDepartment').value,supplierId=document.getElementById('reportSupplier').value;
   currentReport=buildReport(kind,department,supplierId);
-  const r=currentReport,cell=(v,i)=>escapeXml(r.money.includes(i)?formatNumber(v):v);
-  document.getElementById('reportOutput').innerHTML=`<header><p>TAMKTVD · QUẢN LÝ MUA HÀNG</p><h2>${escapeXml(r.title)}</h2><p>${escapeXml(periodLabel())}</p><p>Phòng ban: ${escapeXml(department||'Tất cả')} · Người nhận: ${escapeXml(findSupplier(supplierId)?.name||'Tất cả')}</p><p class="report-basis">${escapeXml(r.basis)}</p><p>Đơn vị: VND · ${r.rows.length} dòng · Ngày lập báo cáo: ${escapeXml(formatDateDisplay(currentDateValue()))}</p></header><div class="report-table-wrap"><table class="${kind==='departments'?'department-report':'payment-report'}"><thead><tr>${r.headers.map(h=>`<th>${escapeXml(h)}</th>`).join('')}</tr></thead><tbody>${r.rows.map(row=>`<tr>${row.map((v,i)=>`<td class="${r.money.includes(i)?'report-money':''}">${cell(v,i)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${r.headers.length}">Không có dữ liệu phù hợp.</td></tr>`}<tr class="report-total">${r.total.map((v,i)=>`<td>${cell(v,i)}</td>`).join('')}</tr></tbody></table></div><footer class="report-signatures"><div>Người lập<br><small>(Ký, ghi rõ họ tên)</small></div><div>Người kiểm tra<br><small>(Ký, ghi rõ họ tên)</small></div><div>Người phê duyệt<br><small>(Ký, ghi rõ họ tên)</small></div></footer>`;
+  document.getElementById('reportDueControl').hidden=kind!=='unpaid';
+  const r=currentReport,cell=(v,i)=>escapeXml(r.money.includes(i)?(Number(v)===0?'0':formatNumber(v)):v);
+  document.getElementById('reportOutput').innerHTML=`<header><p>TAMKTVD · QUẢN LÝ MUA HÀNG</p><h2>${escapeXml(r.title)}</h2><p>${escapeXml(periodLabel())}</p><p>Phòng ban: ${escapeXml(department||'Tất cả')} · Người nhận: ${escapeXml(findSupplier(supplierId)?.name||'Tất cả')}</p><p class="report-basis">${escapeXml(r.basis)}</p><p>Đơn vị: VND · ${r.rows.length} dòng · Ngày lập báo cáo: ${escapeXml(formatDateDisplay(currentDateValue()))}</p></header><div class="report-table-wrap"><table class="${kind==='payments'?'payment-report':'summary-report'}"><thead><tr>${r.headers.map(h=>`<th>${escapeXml(h)}</th>`).join('')}</tr></thead><tbody>${r.rows.map(row=>`<tr>${row.map((v,i)=>`<td class="${r.money.includes(i)?'report-money':''}">${cell(v,i)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${r.headers.length}">Không có dữ liệu phù hợp.</td></tr>`}<tr class="report-total">${r.total.map((v,i)=>`<td>${cell(v,i)}</td>`).join('')}</tr></tbody></table></div><footer class="report-signatures"><div>Người lập<br><small>(Ký, ghi rõ họ tên)</small></div><div>Người kiểm tra<br><small>(Ký, ghi rõ họ tên)</small></div><div>Người phê duyệt<br><small>(Ký, ghi rõ họ tên)</small></div></footer>`;
 }
 document.getElementById('periodFilter').addEventListener('submit',e=>{e.preventDefault();applyPeriod()});
 document.getElementById('clearPeriod').addEventListener('click',()=>{document.getElementById('periodFilter').reset();applyPeriod()});
@@ -71,7 +142,7 @@ document.getElementById('periodPreset').addEventListener('change',e=>{
  document.getElementById('periodFrom').value=from;document.getElementById('periodTo').value=to;
 });
 document.getElementById('viewReport').addEventListener('click',applyPeriod);
-for(const id of ['reportKind','reportDepartment','reportSupplier'])document.getElementById(id).addEventListener('change',renderReport);
+for(const id of ['reportKind','reportDepartment','reportSupplier','reportDueFilter'])document.getElementById(id).addEventListener('change',renderReport);
 document.getElementById('printReport').addEventListener('click',()=>{if(applyPeriod())window.print()});
 document.getElementById('exportReport').addEventListener('click',()=>{if(applyPeriod()){const r=currentReport;downloadExcelFile('bao-cao-'+document.getElementById('reportKind').value+'.xls',r.title+' · '+periodLabel(),r.headers,[...r.rows,r.total])}});
 
