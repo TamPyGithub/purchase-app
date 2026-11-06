@@ -1,3 +1,80 @@
+let reportPeriod = {from:'',to:'',missing:false,paymentDate:'documentReceivedDate'};
+let currentReport = null;
+function periodActive() { return !!(reportPeriod.from || reportPeriod.to || reportPeriod.missing); }
+function dateInPeriod(value) {
+  const date = toStorageDate(value || '');
+  const valid = validPaymentDate(date);
+  if (reportPeriod.missing) return !valid;
+  if (!periodActive()) return true;
+  return valid && (!reportPeriod.from || date >= reportPeriod.from) && (!reportPeriod.to || date <= reportPeriod.to);
+}
+function recordInPeriod(record, kind) {
+  if (!record || kind === 'suppliers') return true;
+  const fields = {requests:'requestDate',tenders:'tenderDate',orders:'orderDate',receipts:'receivedDate',payments:reportPeriod.paymentDate};
+  return !fields[kind] || dateInPeriod(record[fields[kind]]);
+}
+function periodLabel() {
+  return reportPeriod.missing ? 'Chứng từ chưa có ngày hợp lệ' : !periodActive() ? 'Toàn bộ thời gian' : `${reportPeriod.from ? formatDateDisplay(reportPeriod.from) : 'Từ đầu'} – ${reportPeriod.to ? formatDateDisplay(reportPeriod.to) : 'đến nay'}`;
+}
+function paymentDateLabel() { return {documentReceivedDate:'Ngày nhận chứng từ',documentDate:'Ngày lập chứng từ',invoiceDate:'Ngày hóa đơn',dueDate:'Hạn thanh toán',paymentDate:'Ngày thanh toán'}[reportPeriod.paymentDate]; }
+function applyPeriod() {
+  const from=document.getElementById('periodFrom').value,to=document.getElementById('periodTo').value;
+  if(from && to && from>to) { document.getElementById('periodStatus').textContent='Từ ngày phải trước hoặc bằng Đến ngày.'; return false; }
+  reportPeriod={from,to,missing:document.getElementById('periodMissing').value==='missing',paymentDate:document.getElementById('periodPaymentDate').value};
+  document.getElementById('periodStatus').textContent=periodLabel()+' · Giấy xin mua: ngày giấy; đấu thầu: ngày đấu thầu; hợp đồng: ngày đặt; nghiệm thu: ngày nhận; thanh toán: '+paymentDateLabel()+'. Tổng quan: hợp đồng theo ngày đặt, thanh toán khác theo ngày lập. Danh mục nhà cung cấp giữ toàn bộ.';
+  renderDashboard();applyMainSearches();renderReport();return true;
+}
+function refreshReportOptions() {
+  const department=document.getElementById('reportDepartment'),supplier=document.getElementById('reportSupplier');
+  const d=department.value,s=supplier.value;
+  const names=[...new Set([...state.requests.map(r=>r.department),...state.payments.map(p=>p.department)].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi'));
+  department.innerHTML='<option value="">Tất cả</option>'+names.map(n=>`<option value="${escapeXml(n)}">${escapeXml(n)}</option>`).join('');
+  supplier.innerHTML='<option value="">Tất cả</option>'+state.suppliers.map(p=>`<option value="${escapeXml(p.id)}">${escapeXml(p.name)}</option>`).join('');
+  department.value=names.includes(d)?d:'';supplier.value=state.suppliers.some(p=>p.id===s)?s:'';
+}
+function buildReport(kind, department='', supplierId='') {
+  const selected=(dept,sup)=> (!department || dept===department) && (!supplierId || sup===supplierId);
+  if(kind==='departments') {
+    const groups=new Map();
+    const add=(dept,amount,other)=>{dept=dept||'Chưa xác định phòng ban';const r=groups.get(dept)||{name:dept,count:0,contracts:0,other:0};if(other)r.other+=amount;else{r.count++;r.contracts+=amount}groups.set(dept,r)};
+    for(const order of state.orders) {
+      const dept=(findRequest(order.requestId)||findRequest(findTender(order.tenderId)?.requestId))?.department||'';
+      if(dateInPeriod(order.orderDate)&&selected(dept,order.supplierId))add(dept,Number(getOrderTotal(order)),false);
+    }
+    for(const p of state.payments)if(isOtherPayment(p)&&dateInPeriod(p.documentDate)&&selected(p.department||'',p.supplierId))add(p.department,Number(p.amount||0),true);
+    const rows=[...groups.values()].sort((a,b)=>(b.contracts+b.other)-(a.contracts+a.other)).map((r,i)=>[i+1,r.name,r.count,r.contracts,r.other,r.contracts+r.other]);
+    return {title:'Tổng hợp theo phòng ban',basis:'Hợp đồng theo ngày đặt; thanh toán khác theo ngày lập chứng từ. Giá trị đã gồm chiết khấu và VAT; không cộng lại chứng từ thanh toán theo hợp đồng.',headers:['STT','Phòng ban','Số hợp đồng','Giá trị hợp đồng','Thanh toán khác','Tổng chi phí'],money:[3,4,5],rows,total:['','Tổng cộng',rows.reduce((s,r)=>s+r[2],0),... [3,4,5].map(c=>rows.reduce((s,r)=>s+r[c],0))]};
+  }
+  const unpaid=kind==='unpaid';
+  const payments=state.payments.filter(p=>recordInPeriod(p,'payments')&&selected(paymentDepartment(p),paymentSupplier(p)?.id||p.supplierId)&&(!unpaid||Number(p.amount)-paymentPaidAmount(p)>0));
+  payments.sort((a,b)=>(toStorageDate(a[reportPeriod.paymentDate]||'')).localeCompare(toStorageDate(b[reportPeriod.paymentDate]||''))||a.id.localeCompare(b.id));
+  const rows=payments.map((p,i)=>[i+1,(paymentSupplier(p)?.name||p.payeeName||'Chưa xác định')+'\n'+(isOtherPayment(p)?'Thanh toán khác':'Theo hợp đồng'),paymentDepartment(p)||'—',(p.invoiceNo||'—')+'\n'+(formatDateDisplay(p.invoiceDate)||''),p.description||'','Nhận: '+formatDateDisplay(p.documentReceivedDate)+'\nLập: '+formatDateDisplay(p.documentDate),'Hạn: '+formatDateDisplay(p.dueDate)+'\nTrả: '+(formatDateDisplay(p.paymentDate)||'—'),Number(p.amount||0),paymentPaidAmount(p),Math.max(0,Number(p.amount)-paymentPaidAmount(p)),updatePaymentStatus(p)]);
+  return {title:unpaid?'Các khoản chưa thanh toán':'Chi tiết thanh toán',basis:'Lọc theo '+paymentDateLabel()+'. Số đã trả và còn lại là số hiện tại của các chứng từ được chọn, không phải số dư tại cuối kỳ. Khoản trả từng phần chỉ ghi trong nội dung chưa được tự tính.',headers:['STT','Người nhận / Loại','Phòng ban','Hóa đơn / Ngày','Nội dung','Ngày nhận / Lập CT','Hạn / Ngày trả','Số tiền','Đã trả hiện tại','Còn lại hiện tại','Trạng thái'],money:[7,8,9],rows,total:['','Tổng cộng','','','','','',...[7,8,9].map(c=>rows.reduce((s,r)=>s+r[c],0)),'']};
+}
+function renderReport() {
+  const kind=document.getElementById('reportKind').value,department=document.getElementById('reportDepartment').value,supplierId=document.getElementById('reportSupplier').value;
+  currentReport=buildReport(kind,department,supplierId);
+  const r=currentReport,cell=(v,i)=>escapeXml(r.money.includes(i)?formatNumber(v):v);
+  document.getElementById('reportOutput').innerHTML=`<header><p>TAMKTVD · QUẢN LÝ MUA HÀNG</p><h2>${escapeXml(r.title)}</h2><p>${escapeXml(periodLabel())}</p><p>Phòng ban: ${escapeXml(department||'Tất cả')} · Người nhận: ${escapeXml(findSupplier(supplierId)?.name||'Tất cả')}</p><p class="report-basis">${escapeXml(r.basis)}</p><p>Đơn vị: VND · ${r.rows.length} dòng · Ngày lập báo cáo: ${escapeXml(formatDateDisplay(currentDateValue()))}</p></header><div class="report-table-wrap"><table class="${kind==='departments'?'department-report':'payment-report'}"><thead><tr>${r.headers.map(h=>`<th>${escapeXml(h)}</th>`).join('')}</tr></thead><tbody>${r.rows.map(row=>`<tr>${row.map((v,i)=>`<td class="${r.money.includes(i)?'report-money':''}">${cell(v,i)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${r.headers.length}">Không có dữ liệu phù hợp.</td></tr>`}<tr class="report-total">${r.total.map((v,i)=>`<td>${cell(v,i)}</td>`).join('')}</tr></tbody></table></div><footer class="report-signatures"><div>Người lập<br><small>(Ký, ghi rõ họ tên)</small></div><div>Người kiểm tra<br><small>(Ký, ghi rõ họ tên)</small></div><div>Người phê duyệt<br><small>(Ký, ghi rõ họ tên)</small></div></footer>`;
+}
+document.getElementById('periodFilter').addEventListener('submit',e=>{e.preventDefault();applyPeriod()});
+document.getElementById('clearPeriod').addEventListener('click',()=>{document.getElementById('periodFilter').reset();applyPeriod()});
+for(const id of ['periodFrom','periodTo'])document.getElementById(id).addEventListener('input',()=>document.getElementById('periodPreset').value='custom');
+document.getElementById('periodPreset').addEventListener('change',e=>{
+ const now=new Date(),y=now.getFullYear(),m=now.getMonth();let from='',to='';
+ const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+ if(e.target.value==='custom')return;
+ if(e.target.value==='month'){from=iso(new Date(y,m,1));to=iso(new Date(y,m+1,0))}
+ if(e.target.value==='previous'){from=iso(new Date(y,m-1,1));to=iso(new Date(y,m,0))}
+ if(e.target.value==='quarter'){const q=Math.floor(m/3)*3;from=iso(new Date(y,q,1));to=iso(new Date(y,q+3,0))}
+ if(e.target.value==='year'){from=iso(new Date(y,0,1));to=iso(new Date(y,11,31))}
+ document.getElementById('periodFrom').value=from;document.getElementById('periodTo').value=to;
+});
+document.getElementById('viewReport').addEventListener('click',applyPeriod);
+for(const id of ['reportKind','reportDepartment','reportSupplier'])document.getElementById(id).addEventListener('change',renderReport);
+document.getElementById('printReport').addEventListener('click',()=>{if(applyPeriod())window.print()});
+document.getElementById('exportReport').addEventListener('click',()=>{if(applyPeriod()){const r=currentReport;downloadExcelFile('bao-cao-'+document.getElementById('reportKind').value+'.xls',r.title+' · '+periodLabel(),r.headers,[...r.rows,r.total])}});
+
 const STORAGE_KEY = "purchase-tracking-data-v1";
 const CLOUD_CONFIG_KEY = "purchase-cloud-config-v1";
 const CLOUD_TABLE = "purchase_app_data";
@@ -82,6 +159,7 @@ const initialData = {
 };
 
 const viewTitles = {
+  reports: "Báo cáo",
   dashboard: "Tổng quan",
   requests: "Giấy xin mua hàng",
   tenders: "Kết quả đấu thầu",
@@ -441,7 +519,7 @@ function exportRequestsToExcel() {
     "Tổng tiền",
     "Lý do",
     "Trạng thái"
-  ], state.requests.map((request) => [
+  ], state.requests.filter(r => recordInPeriod(r, 'requests')).map((request) => [
     request.code,
     formatDateDisplay(request.requestDate),
     request.department,
@@ -454,6 +532,7 @@ function exportRequestsToExcel() {
 
 function exportTendersToExcel() {
   downloadExcelFile("danh-muc-ket-qua-dau-thau.xls", "Kết quả đấu thầu", [
+    "Ngày đấu thầu",
     "Số giấy xin mua",
     "Phòng ban",
     "Danh sách mặt hàng",
@@ -465,11 +544,12 @@ function exportTendersToExcel() {
     "Tất cả báo giá",
     "Lý do chọn",
     "Trạng thái"
-  ], state.tenders.map((tender) => {
+  ], state.tenders.filter(r => recordInPeriod(r, 'tenders')).map((tender) => {
     const request = findRequest(tender.requestId);
     const selectedQuote = getSelectedTenderQuote(tender);
     const supplier = findSupplier(tender.selectedSupplierId);
     return [
+      formatDateDisplay(tender.tenderDate),
       request?.code || "",
       request?.department || "",
       request ? formatItemsForExport(getRequestItems(request)) : "",
@@ -498,7 +578,7 @@ function exportOrdersToExcel() {
     "Tiền thuế VAT",
     "Tổng tiền hàng",
     "Trạng thái"
-  ], state.orders.map((order) => {
+  ], state.orders.filter(r => recordInPeriod(r, 'orders')).map((order) => {
     const supplier = findSupplier(order.supplierId);
     const request = findRequest(order.requestId);
     return [
@@ -759,6 +839,8 @@ function render() {
   fillSelects();
   setupMainSearches();
   applyMainSearches();
+  refreshReportOptions();
+  renderReport();
 }
 
 function normalizeSearchText(value) {
@@ -768,7 +850,7 @@ function normalizeSearchText(value) {
 
 function setupMainSearches() {
   document.querySelectorAll('.view').forEach(view => {
-    if (view.querySelector('.main-search')) return;
+    if (view.id === 'reportsView' || view.querySelector('.main-search')) return;
     const name = view.id.replace(/View$/, '');
     const form = document.createElement('form');
     form.className = 'main-search';
@@ -833,27 +915,30 @@ function applyMainSearches() {
       const visibleText = name === 'dashboard' ? cells.textContent : cells.map(cell => cell.textContent).join(' ');
       const text = normalizeSearchText(visibleText + ' ' + (name === 'dashboard' ? '' : mainSearchRecordText(records[index] || {}, name)));
       const type = name === 'payments' ? document.getElementById('paymentTypeFilter').value : '';
-      row.hidden = !terms.every(term => text.includes(term)) || !!(type && (isOtherPayment(records[index]) ? 'other' : 'contract') !== type);
+      row.hidden = (name !== 'dashboard' && !recordInPeriod(records[index], name)) || !terms.every(term => text.includes(term)) || !!(type && (isOtherPayment(records[index]) ? 'other' : 'contract') !== type);
       if (!row.hidden) matches++;
     });
-    form.querySelector('.search-status').textContent = terms.length
+    form.querySelector('.search-status').textContent = (terms.length || periodActive())
       ? (matches ? `${matches}/${rows.length} kết quả` : 'Không tìm thấy dữ liệu phù hợp.') + (name === 'dashboard' ? ' · Số liệu tổng hợp giữ nguyên.' : '')
       : '';
   });
 }
 
 function renderDashboard() {
-  const pendingRequests = state.requests.filter((request) => request.status === "Chờ duyệt").length;
-  const activeOrders = state.orders.filter((order) => order.status !== "Đã nhận").length;
-  const totalSpend = state.orders.reduce((sum, order) => sum + Number(getOrderTotal(order)), 0);
-  const otherSpend = state.payments.filter(isOtherPayment).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const requests = state.requests.filter(r => recordInPeriod(r, 'requests'));
+  const orders = state.orders.filter(r => recordInPeriod(r, 'orders'));
+  const payments = state.payments.filter(r => dateInPeriod(r.documentDate));
+  const pendingRequests = requests.filter((request) => request.status === "Chờ duyệt").length;
+  const activeOrders = orders.filter((order) => order.status !== "Đã nhận").length;
+  const totalSpend = orders.reduce((sum, order) => sum + Number(getOrderTotal(order)), 0);
+  const otherSpend = payments.filter(isOtherPayment).reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const unpaid = state.payments.reduce((sum, payment) => sum + Math.max(0, Number(payment.amount) - paymentPaidAmount(payment)), 0);
 
   document.getElementById("metricsGrid").innerHTML = [
     ["Giấy xin mua chờ duyệt", pendingRequests, "Cần quản lý xử lý"],
     ["Hợp đồng đang theo dõi", activeOrders, "Hợp đồng chưa hoàn tất"],
     ["Tổng chi phí", formatMoney(totalSpend + otherSpend), "Hợp đồng và thanh toán khác"],
-    ["Công nợ còn lại", formatMoney(unpaid), "Theo chứng từ thanh toán"]
+    ["Công nợ hiện tại", formatMoney(unpaid), "Toàn bộ thời gian"]
   ].map(([label, value, hint]) => `
     <article class="metric-card">
       <span>${label}</span>
@@ -863,17 +948,17 @@ function renderDashboard() {
   `).join("");
 
   const activities = [
-    ...state.requests.filter((request) => request.status === "Chờ duyệt").map((request) => ({
+    ...requests.filter((request) => request.status === "Chờ duyệt").map((request) => ({
       title: `${escapeXml(request.code)} đang chờ duyệt`,
       detail: `${escapeXml(request.department)} cần mua ${getRequestSelectText(request)}`,
       value: formatMoney(getRequestTotal(request))
     })),
-    ...state.orders.filter((order) => order.status === "Đang giao").map((order) => ({
+    ...orders.filter((order) => order.status === "Đang giao").map((order) => ({
       title: `${order.contractNo || order.code} đang giao`,
       detail: findSupplier(order.supplierId)?.name || "Nhà cung cấp",
       value: formatDateDisplay(order.expectedDate)
     })),
-    ...state.payments.filter((payment) => updatePaymentStatus(payment) !== "Đã thanh toán").map((payment) => ({
+    ...payments.filter((payment) => updatePaymentStatus(payment) !== "Đã thanh toán").map((payment) => ({
       title: `${payment.invoiceNo || payment.description || "Chứng từ"} cần thanh toán`,
       detail: isOtherPayment(payment) ? paymentSupplier(payment)?.name || payment.payeeName || "Thanh toán khác" : findOrder(payment.orderId)?.contractNo || findOrder(payment.orderId)?.code || "Hợp đồng",
       value: formatMoney(Math.max(0, payment.amount - paymentPaidAmount(payment)))
@@ -893,9 +978,9 @@ function renderDashboard() {
   `).join("") : `<p>Không có việc cần xử lý.</p>`;
 
   const spendBySupplier = state.suppliers.map((supplier) => {
-    const total = state.orders
+    const total = orders
       .filter((order) => order.supplierId === supplier.id)
-      .reduce((sum, order) => sum + Number(getOrderTotal(order)), 0) + state.payments.filter(p => isOtherPayment(p) && p.supplierId === supplier.id).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      .reduce((sum, order) => sum + Number(getOrderTotal(order)), 0) + payments.filter(p => isOtherPayment(p) && p.supplierId === supplier.id).reduce((sum, p) => sum + Number(p.amount || 0), 0);
     return { supplier, total };
   }).filter((row) => row.total > 0)
     .sort((a, b) => b.total - a.total || a.supplier.name.localeCompare(b.supplier.name, 'vi'));
@@ -919,13 +1004,13 @@ function renderDashboard() {
   `).join("") : `<p>Chưa có dữ liệu chi phí.</p>`;
 
   const departments = new Map();
-  for (const order of state.orders) {
+  for (const order of orders) {
     const request = findRequest(order.requestId) || findRequest(findTender(order.tenderId)?.requestId);
     const department = String(request?.department || '').trim() || 'Chưa xác định phòng ban';
     const amount = Number(getOrderTotal(order));
     departments.set(department, (departments.get(department) || 0) + (Number.isFinite(amount) ? amount : 0));
   }
-  for (const payment of state.payments.filter(isOtherPayment)) {
+  for (const payment of payments.filter(isOtherPayment)) {
     const department = payment.department || 'Chưa xác định phòng ban';
     departments.set(department, (departments.get(department) || 0) + Number(payment.amount || 0));
   }
@@ -990,7 +1075,7 @@ function renderTenders() {
     const supplier = findSupplier(tender.selectedSupplierId);
     const selectedQuote = getSelectedTenderQuote(tender);
     return `
-      <tr>
+      <tr><td>${escapeXml(formatDateDisplay(tender.tenderDate) || "Chưa có ngày")}</td>
         <td><strong>${escapeXml(request?.code || "Không rõ")}</strong><br><small>${escapeXml(request?.department || "")}</small></td>
         <td>${tender.quotes?.length || 0}</td>
         <td>${escapeXml(supplier?.name || "Chưa chọn")}</td>
@@ -1286,6 +1371,7 @@ function openModal(id) {
   }
 
   if (id === "tenderModal") {
+    document.getElementById("tenderDate").value = currentDateValue();
     fillTenderRequestOptions();
     resetTenderQuotes();
     fillTenderRequestDetails();
@@ -1717,6 +1803,7 @@ function collectTenderQuotes() {
 
 function collectTenderDraft() {
   return {
+    tenderDate: document.getElementById("tenderDate").value,
     requestId: document.getElementById("tenderRequestSelect").value,
     requestCode: document.getElementById("tenderRequestCode").value,
     department: document.getElementById("tenderRequestDepartment").value,
@@ -1729,6 +1816,7 @@ function collectTenderDraft() {
 
 function restoreTenderDraft(draft, newSupplierId = "") {
   showOnlyModal("tenderModal");
+  document.getElementById("tenderDate").value = draft.tenderDate || "";
   document.getElementById("tenderRequestSelect").value = draft.requestId || "";
   document.getElementById("tenderRequestCode").value = draft.requestCode || "";
   document.getElementById("tenderRequestDepartment").value = draft.department || "";
@@ -1751,6 +1839,7 @@ function openEditTender(tenderId) {
   if (!tender) return;
 
   showOnlyModal("tenderModal");
+  document.getElementById("tenderDate").value = toStorageDate(tender.tenderDate || "");
   fillTenderRequestOptions(tender.requestId);
   document.getElementById("tenderRequestSelect").value = tender.requestId;
   fillTenderRequestDetails();
@@ -2055,6 +2144,7 @@ document.querySelectorAll(".modal").forEach((form) => {
       const selectedIndex = Number(document.querySelector('#tenderQuotes [name="selectedQuote"]:checked')?.value || 0);
       const selectedSupplierId = quotes[selectedIndex]?.supplierId || quotes[0]?.supplierId || "";
       const tenderData = {
+        tenderDate: toStorageDate(data.tenderDate),
         requestId: data.requestId,
         selectedSupplierId,
         selectionReason: data.selectionReason,
