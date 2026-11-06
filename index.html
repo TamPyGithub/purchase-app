@@ -53,6 +53,7 @@
           <button class="nav-item" data-view="suppliers" type="button">Nhà cung cấp</button>
           <button class="nav-item" data-view="receipts" type="button">Nghiệm thu hàng</button>
           <button class="nav-item" data-view="payments" type="button">Chứng từ thanh toán</button>
+        <button class="nav-item" data-view="reports" type="button">Báo cáo</button>
         </nav>
 
         <div class="sidebar-footer">
@@ -76,6 +77,14 @@
           </div>
         </header>
 
+        <form id="periodFilter" class="period-filter">
+          <label>Giai đoạn<select id="periodPreset"><option value="all">Tất cả</option><option value="month">Tháng này</option><option value="previous">Tháng trước</option><option value="quarter">Quý này</option><option value="year">Năm nay</option><option value="custom">Tùy chọn</option></select></label>
+          <label>Từ ngày<input id="periodFrom" type="date" /></label><label>Đến ngày<input id="periodTo" type="date" /></label>
+          <label>Ngày lọc thanh toán<select id="periodPaymentDate"><option value="documentReceivedDate">Ngày nhận chứng từ</option><option value="documentDate">Ngày lập chứng từ</option><option value="invoiceDate">Ngày hóa đơn</option><option value="dueDate">Hạn thanh toán</option><option value="paymentDate">Ngày thanh toán</option></select></label>
+          <label>Ngày chứng từ<select id="periodMissing"><option value="dated">Theo giai đoạn</option><option value="missing">Chưa có ngày</option></select></label>
+          <button type="submit" class="primary-button">Áp dụng</button><button type="button" class="ghost-button" id="clearPeriod">Xóa lọc</button>
+          <p id="periodStatus" role="status"></p>
+        </form>
         <section class="view active" id="dashboardView" aria-labelledby="pageTitle">
           <div class="metrics-grid" id="metricsGrid"></div>
 
@@ -155,7 +164,7 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr>
+                <tr><th>Ngày đấu thầu</th>
                   <th>Giấy xin mua</th>
                   <th>Số NCC báo giá</th>
                   <th>NCC được chọn</th>
@@ -264,6 +273,14 @@
             </table>
           </div>
         </section>
+        <section class="view" id="reportsView">
+          <div class="report-controls">
+            <label>Loại báo cáo<select id="reportKind"><option value="payments">Chi tiết thanh toán</option><option value="unpaid">Các khoản chưa thanh toán</option><option value="departments">Tổng hợp theo phòng ban</option></select></label>
+            <label>Phòng ban<select id="reportDepartment"><option value="">Tất cả</option></select></label>
+            <label>Đơn vị/người nhận<select id="reportSupplier"><option value="">Tất cả</option></select></label>
+            <button id="viewReport" type="button" class="primary-button">Xem báo cáo</button><button id="printReport" type="button" class="ghost-button">In / Lưu PDF</button><button id="exportReport" type="button" class="ghost-button">Xuất Excel</button>
+          </div><article id="reportOutput" class="report-paper"></article>
+        </section>
       </main>
     </div>
 
@@ -370,6 +387,7 @@
           <h3>Ghi kết quả đấu thầu</h3>
           <button class="ghost-button close-modal" type="button">×</button>
         </div>
+        <label>Ngày đấu thầu<input id="tenderDate" name="tenderDate" type="date" required /></label>
         <label>Giấy xin mua đã duyệt<select name="requestId" id="tenderRequestSelect" required></select></label>
         <div class="form-row">
           <label>Số giấy xin mua<input name="requestCode" id="tenderRequestCode" required /></label>
@@ -564,6 +582,7 @@
       </form>
     </dialog>
     <datalist id="unitOptions"></datalist>
+    
     <script src="./online.js"></script>
 <script src="./app.js"></script>
   </body>
