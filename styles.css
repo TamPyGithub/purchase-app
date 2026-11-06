@@ -973,6 +973,9 @@ textarea {
  .report-signatures { margin-top:12mm; padding-bottom:15mm; }
 }
 .report-paper td { white-space:pre-line; }
+ .report-controls [hidden] { display:none!important; }
+ .report-paper .summary-report th:first-child { width:4%; }
+ .report-paper .summary-report { min-width:1000px; }
 .report-paper .payment-report { min-width:1250px; }
 @media print {
  .report-paper .payment-report { min-width:0; }
