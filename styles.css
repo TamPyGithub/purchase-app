@@ -973,6 +973,13 @@ textarea {
  .report-signatures { margin-top:12mm; padding-bottom:15mm; }
 }
 .report-paper td { white-space:pre-line; }
+#documentPrintDialog { width:min(1200px,96vw); max-width:96vw; height:94vh; max-height:94vh; padding:16px; border:1px solid #cdd7ce; border-radius:10px; }
+#documentPrintDialog::backdrop { background:#0008; }
+.document-print-toolbar { display:flex; align-items:center; gap:12px; }
+.document-print-toolbar strong { flex:1; }
+#documentPrintDialog p { font-size:13px; }
+#documentPrintFrame { width:100%; height:calc(100% - 110px); border:1px solid #ddd; background:white; }
+.document-print-button { white-space:nowrap; }
  .report-controls [hidden] { display:none!important; }
  .report-paper .summary-report th:first-child { width:4%; }
  .report-paper .summary-report { min-width:1000px; }
