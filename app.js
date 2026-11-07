@@ -2489,3 +2489,75 @@ for (const prefix of ['order', 'receipt']) {
     });
   }
 }
+
+// Read form values without saving or changing the document being edited.
+function buildDocumentPrint(kind) {
+  const form=document.getElementById(kind+'Modal');
+  const value=name=>form.elements[name]?.value||'';
+  const text=id=>document.getElementById(id)?.value||'';
+  const esc=v=>escapeXml(String(v??''));
+  const money=v=>Number(v||0).toLocaleString('vi-VN');
+  const field=(label,v)=>`<div class="field"><b>${esc(label)}:</b> <span>${esc(v||'—')}</span></div>`;
+  const table=(headers,rows)=>`<table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${headers.length}">Chưa có dữ liệu</td></tr>`}</tbody></table>`;
+  let body='',title='',signatures=[],landscape=false;
+  function items(id,adjust=false) {
+    let subtotal=0;
+    const rows=[...document.querySelectorAll('#'+id+' tr')].map((row,i)=>{
+      const get=n=>row.querySelector('[name="'+n+'"]')?.value||'';
+      const quantity=Number(get('quantity')),price=parseNumber(get('unitPrice')),amount=quantity*price;subtotal+=amount;
+      return [i+1,get('item'),get('specification'),money(quantity),get('unit'),money(price),money(amount)];
+    });
+    let html=table(['STT','Mặt hàng','Quy cách','Số lượng','ĐVT','Đơn giá','Thành tiền'],rows);
+    html+='<div class="totals">'+field(adjust?'Tổng tiền hàng chưa thuế':'Tổng ước tính',money(subtotal)+' VND');
+    if(adjust){const discount=-Math.abs(parseNumber(value('discountAmount'))),vat=parseNumber(value('vatAmount'));html+=field('Tiền chiết khấu',money(discount)+' VND')+field('Tiền thuế VAT',money(vat)+' VND')+field('Tổng tiền hàng',money(subtotal+discount+vat)+' VND')}
+    return html+'</div>';
+  }
+  function supplier(s) { return field('Nhà cung cấp',s?.name)+field('Mã số thuế',s?.taxCode)+field('Người liên hệ',s?.contact)+field('Điện thoại',s?.phone); }
+  if(kind==='request') {
+    title='GIẤY XIN MUA HÀNG';
+    body=field('Số giấy',value('code'))+field('Ngày giấy',formatDateDisplay(value('requestDate')))+field('Phòng ban',value('department'))+items('requestItems')+field('Lý do đề nghị',value('reason'));
+    signatures=['Người đề nghị','Trưởng phòng ban','Người phê duyệt'];
+  } else if(kind==='tender') {
+    title='KẾT QUẢ ĐẤU THẦU';landscape=true;
+    body=field('Ngày đấu thầu',formatDateDisplay(value('tenderDate')))+field('Số giấy xin mua',value('requestCode'))+field('Phòng ban',value('department'))+'<h3>Danh mục mua hàng</h3>'+items('tenderRequestItems');
+    const rows=[...document.querySelectorAll('#tenderQuotes tr')].map((row,i)=>{
+      const get=n=>row.querySelector('[name="'+n+'"]')?.value||'';const s=findSupplier(get('supplierId'));
+      return [i+1,s?.name||'—',s?.taxCode||'—',money(parseNumber(get('price'))),get('deliveryDays'),get('paymentTerm'),get('note'),row.querySelector('[name="selectedQuote"]')?.checked?'Được chọn':''];
+    });
+    body+='<h3>Bảng báo giá nhà cung cấp</h3>'+table(['STT','Nhà cung cấp','Mã số thuế','Giá báo (VND)','Thời gian giao (ngày)','Thanh toán','Ghi chú','Kết quả'],rows)+field('Lý do chọn',value('selectionReason'));
+    signatures=['Người lập','Đại diện xét thầu','Người phê duyệt'];
+  } else if(kind==='order') {
+    title='HỢP ĐỒNG MUA HÀNG';const tender=findTender(value('tenderId')),request=findRequest(tender?.requestId);
+    body=field('Số hợp đồng',value('contractNo'))+field('Ngày hợp đồng',formatDateDisplay(value('orderDate')))+field('Giấy xin mua',request?.code)+field('Ngày đấu thầu',formatDateDisplay(tender?.tenderDate))+field('Phòng ban',request?.department)+supplier(findSupplier(value('supplierId')))+field('Ngày giao dự kiến',formatDateDisplay(value('expectedDate')))+items('orderItems',true);
+    signatures=['Người lập','Đại diện bên mua','Đại diện nhà cung cấp'];
+  } else if(kind==='receipt') {
+    title='BIÊN BẢN NGHIỆM THU HÀNG';const order=findOrder(value('orderId'));
+    body=field('Số hợp đồng',order?.contractNo||order?.code)+supplier(findSupplier(order?.supplierId))+field('Ngày nhận',formatDateDisplay(value('receivedDate')))+field('Chủ nhiệm nghiệm thu',value('acceptanceChair'))+'<h3>Danh mục thực nhận</h3>'+items('receiptItems',true)+field('Kết quả nghiệm thu',value('condition'))+field('Kết luận của hội đồng nghiệm thu',value('conclusion'));
+    signatures=['Chủ nhiệm nghiệm thu','Đại diện giao hàng','Đại diện nhận hàng'];
+  } else if(kind==='payment') {
+    title='CHỨNG TỪ THANH TOÁN';const other=value('paymentType')==='other',order=other?null:findOrder(value('orderId'));
+    body=field('Loại chứng từ',other?'Thanh toán khác':'Theo hợp đồng mua hàng')+field('Ngày nhận chứng từ',formatDateDisplay(value('documentReceivedDate')))+field('Ngày lập chứng từ',formatDateDisplay(value('documentDate')))+field('Đơn vị/người nhận tiền',text(other?'paymentPayeeName':'paymentSupplierName'))+field('Mã số thuế',text(other?'paymentPayeeTax':'paymentSupplierTaxCode'))+field('Phòng ban',other?value('department'):order?reportOrderDepartment(order):'')+field('Số tiền thanh toán',other?money(parseNumber(value('amount')))+' VND':text('paymentReceiptAmount'));
+    if(!other)body+=field('Hợp đồng mua hàng',order?.contractNo||order?.code)+field('Kết quả nghiệm thu',text('paymentReceiptCondition'))+field('Kết luận nghiệm thu',text('paymentReceiptConclusion'));
+    body+=field('Số hóa đơn',value('invoiceNo'))+field('Ngày hóa đơn',formatDateDisplay(value('invoiceDate')))+field('Nội dung thanh toán',value('description'))+field('Hạn thanh toán',formatDateDisplay(value('dueDate')))+field('Ngày thanh toán',formatDateDisplay(value('paymentDate')));
+    const saved=state.payments.find(p=>p.id===editingPaymentId);
+    body+=field('Trạng thái',value('paymentDate')?'Đã thanh toán':saved?.paidAmount?'Đã ghi nhận '+money(saved.paidAmount)+' VND; chưa có ngày thanh toán':'Chưa thanh toán');
+    signatures=['Người lập','Người kiểm tra','Người phê duyệt'];
+  }
+  return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+  @page{size:A4 ${landscape?'landscape':'portrait'};margin:14mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#111;font-size:10pt;line-height:1.45;margin:0;padding:18px}header{text-align:center;margin-bottom:20px}h1{font-size:18pt;margin:12px 0}h3{font-size:11pt;margin:16px 0 8px}.field{margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}.field span{white-space:pre-wrap}table{width:100%;table-layout:fixed;border-collapse:collapse;margin:12px 0;font-size:9pt}th,td{border:1px solid #666;padding:6px;overflow-wrap:anywhere;white-space:pre-wrap;vertical-align:top}th{background:#eef2ee}th:first-child{width:6%}thead{display:table-header-group}tr{break-inside:avoid}.totals{text-align:right;break-inside:avoid}footer{display:flex;justify-content:space-around;gap:18px;text-align:center;margin-top:25px;padding-bottom:70px;break-inside:avoid}footer>div{flex:1}small{font-size:9pt}.stamp{font-size:8pt;color:#555;margin-top:15px}@media print{body{padding:0}}</style></head><body><header><div>TAMKTVD · QUẢN LÝ MUA HÀNG</div><h1>${esc(title)}</h1></header>${body}<footer>${signatures.map(s=>`<div><b>${esc(s)}</b><br><small>(Ký, ghi rõ họ tên)</small></div>`).join('')}</footer><div class="stamp">Ngày in: ${esc(formatDateDisplay(currentDateValue()))} · Đơn vị tiền: VND</div></body></html>`;
+}
+
+const documentPrintDialog=document.createElement('dialog');
+documentPrintDialog.id='documentPrintDialog';
+documentPrintDialog.innerHTML='<div class="document-print-toolbar"><strong>Xem trước chứng từ</strong><button type="button" id="documentPrintConfirm" class="primary-button" disabled>In / Lưu PDF</button><button type="button" id="documentPrintClose" class="ghost-button">Đóng</button></div><p>Bản in lấy nội dung hiện đang mở trong form, bao gồm chỉnh sửa chưa lưu. In không tự lưu chứng từ. Hợp đồng chỉ trình bày các thông tin đang có trong app.</p><iframe title="Bản in chứng từ" id="documentPrintFrame"></iframe>';
+document.body.append(documentPrintDialog);
+document.getElementById('documentPrintClose').addEventListener('click',()=>documentPrintDialog.close());
+document.getElementById('documentPrintConfirm').addEventListener('click',()=>{const target=document.getElementById('documentPrintFrame').contentWindow;target.focus();target.print()});
+for(const kind of ['request','tender','order','receipt','payment']) {
+  const button=document.createElement('button');button.type='button';button.className='ghost-button document-print-button';button.textContent='In chứng từ';
+  document.querySelector('#'+kind+'Modal .modal-header').append(button);
+  button.addEventListener('click',()=>{
+    const frame=document.getElementById('documentPrintFrame'),print=document.getElementById('documentPrintConfirm');print.disabled=true;
+    frame.onload=()=>{print.disabled=false};frame.srcdoc=buildDocumentPrint(kind);documentPrintDialog.showModal();
+  });
+}
