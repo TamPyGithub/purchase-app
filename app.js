@@ -43,6 +43,24 @@ function renderInquiry() {
     return `<section class="inquiry-branch"><h3>${e(o.contractNo||o.code||o.id)}</h3>${contract}${!findTender(o.tenderId)?missing('Hợp đồng chưa liên kết trực tiếp với kết quả đấu thầu.'):''}<h4>4. Giao hàng và nghiệm thu</h4>${received||missing('Chưa ghi nhận biên bản nghiệm thu.')}<h4>5. Thanh toán</h4>${paid||missing('Chưa lập chứng từ thanh toán cho hợp đồng này.')}</section>`;
   }).join('');
   output.innerHTML=`<header><h3>Quá trình mua hàng · ${e(matches.find(r=>r.kind===inquirySelection.kind&&r.id===inquirySelection.id).code)}</h3><p>Ngày tháng lấy từ chứng từ đã lưu; ngày giao dự kiến không phải ngày giao thực tế. App hiện chưa lưu giờ thực hiện và ngày giao riêng ngoài ngày nhận/nghiệm thu.</p>${inquirySelection.kind==='order'?'<p>Đang xem riêng hợp đồng đã chọn và các chứng từ liên kết.</p>':'<p>Hiển thị tất cả hợp đồng liên kết với giấy xin mua này.</p>'}</header><div class="inquiry-timeline">${req}<h4>2. Đấu thầu</h4>${tenderCards||missing('Chưa có kết quả đấu thầu liên kết.')} ${branches||missing('Chưa lập hợp đồng; chưa có nghiệm thu và thanh toán theo hợp đồng.')}</div>`;
+  const printButton=document.createElement('button');
+  printButton.type='button';printButton.id='printInquiry';printButton.className='primary-button';printButton.textContent='In kết quả truy vấn';
+  printButton.addEventListener('click',printInquiryResult);
+  output.querySelector('header').prepend(printButton);
+}
+
+function printInquiryResult() {
+  if(!inquirySelection)return;
+  const output=document.getElementById('inquiryOutput');
+  if(!output.querySelector('.inquiry-timeline'))return;
+  // Snapshot exactly the selected, displayed result, including all contract branches.
+  const copy=output.cloneNode(true);
+  copy.querySelectorAll('button').forEach(button=>button.remove());
+  const title=copy.querySelector('header h3').textContent;
+  const html=`<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${escapeXml(title)}</title><style>
+  @page{size:A4 portrait;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:10pt;line-height:1.4;color:#111;margin:0;padding:18px}h1{font-size:17pt;text-align:center;margin:10px 0 18px}.brand{text-align:center;font-size:10pt}h3{font-size:12pt}h4{font-size:10.5pt}h3,h4{break-after:avoid}p{margin:8px 0}header{border-bottom:1px solid #555;padding-bottom:10px;margin-bottom:14px}header p,.stamp{font-size:9pt;color:#444}.inquiry-card{border:1px solid #aaa;padding:10px;margin:10px 0;break-inside:auto}.inquiry-card-heading h4{margin:0 0 8px}.inquiry-card dl{margin:0;display:block}.inquiry-card dl>div{display:block;margin:5px 0;break-inside:avoid}dt{display:inline;font-weight:bold}dt:after{content:': '}dd{display:inline;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.inquiry-branch{margin-top:16px;border-top:2px solid #555;padding-top:8px}.inquiry-missing{border-left:3px solid #777;padding:8px;background:#f5f5f5;break-inside:avoid}footer{display:flex;gap:20px;justify-content:space-around;text-align:center;margin-top:24px;padding-bottom:65px;break-inside:avoid}footer>div{flex:1}small{font-size:9pt}@media print{body{padding:0}}
+  </style></head><body><div class="brand">TAMKTVD · QUẢN LÝ MUA HÀNG</div><h1>KẾT QUẢ TRUY VẤN QUÁ TRÌNH MUA HÀNG</h1><p class="stamp">Ngày in: ${escapeXml(formatDateDisplay(currentDateValue()))} · Đơn vị tiền: VND</p>${copy.innerHTML}<footer><div><b>Người lập</b><br><small>(Ký, ghi rõ họ tên)</small></div><div><b>Người kiểm tra</b><br><small>(Ký, ghi rõ họ tên)</small></div></footer></body></html>`;
+  showDocumentPrint(html,'Bản in gồm toàn bộ quá trình của hồ sơ đang xem, kể cả nội dung bên dưới màn hình. Ngày tháng và số tiền theo kết quả truy vấn tại lúc mở bản in.');
 }
 
 document.getElementById('inquirySearchForm').addEventListener('submit',event=>{
@@ -2611,11 +2629,15 @@ documentPrintDialog.innerHTML='<div class="document-print-toolbar"><strong>Xem t
 document.body.append(documentPrintDialog);
 document.getElementById('documentPrintClose').addEventListener('click',()=>documentPrintDialog.close());
 document.getElementById('documentPrintConfirm').addEventListener('click',()=>{const target=document.getElementById('documentPrintFrame').contentWindow;target.focus();target.print()});
+function showDocumentPrint(html,note='Bản in lấy nội dung hiện đang mở trong form, bao gồm chỉnh sửa chưa lưu. In không tự lưu chứng từ. Hợp đồng chỉ trình bày các thông tin đang có trong app.') {
+  const frame=document.getElementById('documentPrintFrame'),print=document.getElementById('documentPrintConfirm');
+  documentPrintDialog.querySelector('p').textContent=note;
+  print.disabled=true;frame.onload=()=>{print.disabled=false};frame.srcdoc=html;documentPrintDialog.showModal();
+}
 for(const kind of ['request','tender','order','receipt','payment']) {
   const button=document.createElement('button');button.type='button';button.className='ghost-button document-print-button';button.textContent='In chứng từ';
   document.querySelector('#'+kind+'Modal .modal-header').append(button);
   button.addEventListener('click',()=>{
-    const frame=document.getElementById('documentPrintFrame'),print=document.getElementById('documentPrintConfirm');print.disabled=true;
-    frame.onload=()=>{print.disabled=false};frame.srcdoc=buildDocumentPrint(kind);documentPrintDialog.showModal();
+    showDocumentPrint(buildDocumentPrint(kind));
   });
 }
