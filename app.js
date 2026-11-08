@@ -1,3 +1,58 @@
+let inquirySelection = null;
+let inquirySubmitted = '';
+
+function inquiryMatches(query) {
+  const q = normalizeSearchText(query);
+  if (!q) return [];
+  const rows = [
+    ...state.requests.map(r => ({kind:'request', id:r.id, code:r.code || r.id, date:r.requestDate, detail:r.department || 'Chưa có phòng ban', aliases:[r.code]})),
+    ...state.orders.map(o => ({kind:'order', id:o.id, code:o.contractNo || o.code || o.id, date:o.orderDate, detail:findSupplier(o.supplierId)?.name || 'Chưa có nhà cung cấp', aliases:[o.contractNo,o.code]}))
+  ];
+  return rows.filter(r => r.aliases.some(s => normalizeSearchText(s).includes(q)))
+    .sort((a,b) => Number(b.aliases.some(s=>normalizeSearchText(s)===q))-Number(a.aliases.some(s=>normalizeSearchText(s)===q)) || a.code.localeCompare(b.code,'vi'));
+}
+
+function inquiryChain(selection) {
+  const order = selection.kind === 'order' ? findOrder(selection.id) : null;
+  const request = selection.kind === 'request' ? findRequest(selection.id) : findRequest(order?.requestId) || findRequest(findTender(order?.tenderId)?.requestId);
+  const orders = selection.kind === 'order' ? (order ? [order] : []) : request ? state.orders.filter(o => o.requestId===request.id || findTender(o.tenderId)?.requestId===request.id) : [];
+  const tenders = selection.kind === 'order' ? state.tenders.filter(t => t.id===order?.tenderId) : request ? state.tenders.filter(t => t.requestId===request.id || orders.some(o=>o.tenderId===t.id)) : [];
+  return {request,tenders,orders};
+}
+
+function renderInquiry() {
+  const e = escapeXml, date = value => validPaymentDate(value || '') ? formatDateDisplay(value) : 'Chưa ghi nhận ngày';
+  const matches = inquiryMatches(inquirySubmitted);
+  const status = document.getElementById('inquiryStatus'), output = document.getElementById('inquiryOutput');
+  status.textContent = !inquirySubmitted ? 'Nhập số chứng từ để bắt đầu tra cứu.' : matches.length ? `${matches.length} kết quả. Chọn hồ sơ để xem quá trình.` : 'Không tìm thấy giấy xin mua hoặc hợp đồng phù hợp.';
+  document.getElementById('inquiryMatches').innerHTML = matches.length ? `<div class="inquiry-results"><table><thead><tr><th>Loại hồ sơ</th><th>Số chứng từ</th><th>Ngày chứng từ</th><th>Phòng ban / Nhà cung cấp</th><th></th></tr></thead><tbody>${matches.map(r=>`<tr><td>${r.kind==='request'?'Giấy xin mua':'Hợp đồng'}</td><td>${e(r.code)}</td><td>${e(date(r.date))}</td><td>${e(r.detail)}</td><td><button type="button" class="mini-button" data-inquiry-kind="${r.kind}" data-inquiry-id="${e(r.id)}" aria-pressed="${inquirySelection?.kind===r.kind&&inquirySelection?.id===r.id}">Xem quá trình</button></td></tr>`).join('')}</tbody></table></div>` : '';
+  if (!inquirySelection || !matches.some(r=>r.kind===inquirySelection.kind&&r.id===inquirySelection.id)) { inquirySelection=null; output.innerHTML=''; return; }
+  const {request,tenders,orders} = inquiryChain(inquirySelection);
+  const field = (label,value) => `<div><dt>${e(label)}</dt><dd>${e(value == null || value === '' ? '—' : value)}</dd></div>`;
+  const open = (kind,id) => `<button type="button" class="mini-button" data-inquiry-open="${kind}" data-inquiry-id="${e(id)}">Mở chứng từ</button>`;
+  const card = (title,fields,kind,id) => `<section class="inquiry-card"><div class="inquiry-card-heading"><h4>${e(title)}</h4>${kind?open(kind,id):''}</div><dl>${fields}</dl></section>`;
+  const missing = message => `<p class="inquiry-missing">${e(message)}</p>`;
+  const items = rows => (rows || []).map(i=>`${i.item || ''}: ${i.quantity ?? ''} ${i.unit || ''}`).join('; ');
+  const req = request ? card('1. Giấy xin mua · '+(request.code||request.id),field('Ngày xin mua',date(request.requestDate))+field('Phòng ban',request.department)+field('Trạng thái',request.status)+field('Danh mục đề nghị',items(getRequestItems(request)))+field('Giá trị đề nghị',formatMoney(getRequestTotal(request)))+field('Lý do',request.reason),'request',request.id) : missing('Chưa có giấy xin mua liên kết với hợp đồng này.');
+  const tenderCards = tenders.map(t=>card('Kết quả đấu thầu',field('Ngày đấu thầu',date(t.tenderDate))+field('Nhà cung cấp được chọn',findSupplier(t.selectedSupplierId)?.name || 'Chưa chọn')+field('Số báo giá',(t.quotes||[]).length)+field('Lý do lựa chọn',t.selectionReason),'tender',t.id)).join('');
+  const branches = orders.map(o=>{
+    const receipts=state.receipts.filter(r=>r.orderId===o.id), payments=state.payments.filter(p=>!isOtherPayment(p)&&p.orderId===o.id);
+    const contract=card('3. Hợp đồng · '+(o.contractNo||o.code||o.id),field('Ngày hợp đồng',date(o.orderDate))+field('Nhà cung cấp',findSupplier(o.supplierId)?.name)+field('Giá trị hợp đồng',formatMoney(getOrderTotal(o)))+field('Ngày giao dự kiến',date(o.expectedDate))+field('Trạng thái',o.status)+field('Danh mục mua',items(getOrderItems(o))),'order',o.id);
+    const received=receipts.map(r=>card('Giao hàng / Nghiệm thu',field('Ngày nhận hàng / nghiệm thu',date(r.receivedDate))+field('Chủ nhiệm nghiệm thu',r.acceptanceChair)+field('Thực nhận',items(r.items))+field('Giá trị nghiệm thu',r.totalAmount == null ? 'Chưa ghi nhận' : formatMoney(r.totalAmount))+field('Kết quả',r.condition)+field('Kết luận',r.conclusion),'receipt',r.id)).join('');
+    const paid=payments.map(p=>card('Chứng từ thanh toán · '+(p.invoiceNo||'Chưa có số hóa đơn'),field('Ngày nhận chứng từ',date(p.documentReceivedDate))+field('Ngày lập chứng từ',date(p.documentDate))+field('Ngày hóa đơn',date(p.invoiceDate))+field('Nội dung',p.description)+field('Số tiền',formatMoney(p.amount))+field('Hạn thanh toán',date(p.dueDate))+field('Ngày thanh toán',p.paymentDate?date(p.paymentDate):'Chưa ghi nhận ngày thanh toán')+field('Đã trả hiện tại',formatMoney(paymentPaidAmount(p)))+field('Còn phải trả',formatMoney(reportRemaining(p)))+field('Trạng thái',updatePaymentStatus(p)),'payment',p.id)).join('');
+    return `<section class="inquiry-branch"><h3>${e(o.contractNo||o.code||o.id)}</h3>${contract}${!findTender(o.tenderId)?missing('Hợp đồng chưa liên kết trực tiếp với kết quả đấu thầu.'):''}<h4>4. Giao hàng và nghiệm thu</h4>${received||missing('Chưa ghi nhận biên bản nghiệm thu.')}<h4>5. Thanh toán</h4>${paid||missing('Chưa lập chứng từ thanh toán cho hợp đồng này.')}</section>`;
+  }).join('');
+  output.innerHTML=`<header><h3>Quá trình mua hàng · ${e(matches.find(r=>r.kind===inquirySelection.kind&&r.id===inquirySelection.id).code)}</h3><p>Ngày tháng lấy từ chứng từ đã lưu; ngày giao dự kiến không phải ngày giao thực tế. App hiện chưa lưu giờ thực hiện và ngày giao riêng ngoài ngày nhận/nghiệm thu.</p>${inquirySelection.kind==='order'?'<p>Đang xem riêng hợp đồng đã chọn và các chứng từ liên kết.</p>':'<p>Hiển thị tất cả hợp đồng liên kết với giấy xin mua này.</p>'}</header><div class="inquiry-timeline">${req}<h4>2. Đấu thầu</h4>${tenderCards||missing('Chưa có kết quả đấu thầu liên kết.')} ${branches||missing('Chưa lập hợp đồng; chưa có nghiệm thu và thanh toán theo hợp đồng.')}</div>`;
+}
+
+document.getElementById('inquirySearchForm').addEventListener('submit',event=>{
+  event.preventDefault(); inquirySubmitted=document.getElementById('inquiryQuery').value.trim();
+  const matches=inquiryMatches(inquirySubmitted); inquirySelection=matches.length===1?{kind:matches[0].kind,id:matches[0].id}:null; renderInquiry();
+});
+document.getElementById('inquiryClear').addEventListener('click',()=>{inquirySubmitted='';inquirySelection=null;document.getElementById('inquiryQuery').value='';renderInquiry();});
+document.getElementById('inquiryMatches').addEventListener('click',event=>{const b=event.target.closest('[data-inquiry-kind]');if(b){inquirySelection={kind:b.dataset.inquiryKind,id:b.dataset.inquiryId};renderInquiry();}});
+document.getElementById('inquiryOutput').addEventListener('click',event=>{const b=event.target.closest('[data-inquiry-open]');if(b){const actions={request:openEditRequest,tender:openEditTender,order:openEditOrder,receipt:openEditReceipt,payment:openEditPayment};actions[b.dataset.inquiryOpen]?.(b.dataset.inquiryId);}});
+
 let reportPeriod = {from:'',to:'',missing:false,paymentDate:'documentReceivedDate'};
 let currentReport = null;
 function periodActive() { return !!(reportPeriod.from || reportPeriod.to || reportPeriod.missing); }
@@ -231,6 +286,7 @@ const initialData = {
 
 const viewTitles = {
   reports: "Báo cáo",
+  inquiry: "Truy vấn dữ liệu",
   dashboard: "Tổng quan",
   requests: "Giấy xin mua hàng",
   tenders: "Kết quả đấu thầu",
@@ -912,6 +968,7 @@ function render() {
   applyMainSearches();
   refreshReportOptions();
   renderReport();
+  renderInquiry();
 }
 
 function normalizeSearchText(value) {
@@ -921,7 +978,7 @@ function normalizeSearchText(value) {
 
 function setupMainSearches() {
   document.querySelectorAll('.view').forEach(view => {
-    if (view.id === 'reportsView' || view.querySelector('.main-search')) return;
+    if (['reportsView', 'inquiryView'].includes(view.id) || view.querySelector('.main-search')) return;
     const name = view.id.replace(/View$/, '');
     const form = document.createElement('form');
     form.className = 'main-search';
@@ -1400,6 +1457,7 @@ function switchView(view) {
   document.querySelectorAll(".view").forEach((section) => section.classList.remove("active"));
   document.getElementById(`${view}View`).classList.add("active");
   document.getElementById("pageTitle").textContent = viewTitles[view];
+  document.getElementById('periodFilter').hidden = view === 'inquiry';
 }
 
 function openModal(id) {

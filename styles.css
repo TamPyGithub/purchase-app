@@ -995,3 +995,20 @@ textarea {
  .payment-report th:nth-child(8),.payment-report th:nth-child(9),.payment-report th:nth-child(10) { width:8%; }
  .payment-report th:nth-child(11) { width:6%; }
 }
+/* Lookup of linked purchasing documents, independent of report date filters. */
+.inquiry-search { display:flex; align-items:end; gap:10px; flex-wrap:wrap; margin:18px 0; }
+#periodFilter[hidden] { display:none; }
+.inquiry-search label { flex:1; min-width:240px; }
+.inquiry-results { overflow:auto; max-height:320px; margin-bottom:24px; border:1px solid #dce5dc; border-radius:10px; }
+.inquiry-results button[aria-pressed="true"] { background:#2d7053; color:white; }
+#inquiryOutput > header { border-bottom:1px solid #dce5dc; margin-bottom:18px; }
+.inquiry-timeline { border-left:3px solid #2d7053; padding-left:20px; }
+.inquiry-card { background:white; border:1px solid #dce5dc; border-radius:10px; padding:16px; margin:12px 0; }
+.inquiry-card-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.inquiry-card h4 { margin:0; }
+.inquiry-card dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 24px; margin-bottom:0; }
+.inquiry-card dt { font-size:12px; color:#626e66; }
+.inquiry-card dd { margin:4px 0 0; overflow-wrap:anywhere; white-space:pre-wrap; }
+.inquiry-branch { margin-top:24px; padding-top:8px; border-top:2px solid #dce5dc; }
+.inquiry-missing { background:#fff7e4; border-left:3px solid #bb8225; padding:12px; border-radius:4px; }
+@media(max-width:650px) { .inquiry-card dl {grid-template-columns:1fr} .inquiry-timeline {padding-left:10px} }

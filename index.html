@@ -54,6 +54,7 @@
           <button class="nav-item" data-view="receipts" type="button">Nghiệm thu hàng</button>
           <button class="nav-item" data-view="payments" type="button">Chứng từ thanh toán</button>
         <button class="nav-item" data-view="reports" type="button">Báo cáo</button>
+        <button class="nav-item" data-view="inquiry" type="button">Truy vấn dữ liệu</button>
         </nav>
 
         <div class="sidebar-footer">
@@ -272,6 +273,18 @@
               <tbody id="paymentsTable"></tbody>
             </table>
           </div>
+        </section>
+        <section class="view" id="inquiryView">
+          <h3>Tra cứu quá trình mua hàng</h3>
+          <p>Nhập số giấy xin mua hoặc số hợp đồng, có thể nhập một phần số chứng từ. Truy vấn hiển thị toàn bộ quá trình, không giới hạn giai đoạn.</p>
+          <form id="inquirySearchForm" class="inquiry-search" role="search">
+            <label for="inquiryQuery">Số giấy xin mua / Số hợp đồng<input id="inquiryQuery" type="search" placeholder="Ví dụ: TV0078 hoặc ML-TV0078" autocomplete="off" /></label>
+            <button type="submit" class="primary-button">Tìm kiếm</button>
+            <button type="button" class="ghost-button" id="inquiryClear">Xóa tìm kiếm</button>
+          </form>
+          <p id="inquiryStatus" role="status" aria-live="polite"></p>
+          <div id="inquiryMatches"></div>
+          <article id="inquiryOutput" aria-live="polite"></article>
         </section>
         <section class="view" id="reportsView">
           <div class="report-controls">
@@ -582,6 +595,7 @@
       </form>
     </dialog>
     <datalist id="unitOptions"></datalist>
+    
     
     <script src="./online.js"></script>
 <script src="./app.js"></script>
